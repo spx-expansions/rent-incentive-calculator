@@ -1,0 +1,1356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SPX Rent Incentive Calculator</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body { font-family: 'Segoe UI', Arial, sans-serif; display: flex; flex-direction: column; background: #f0f2f5; color: #333; }
+
+header { background: #c0392b; color: #fff; padding: 12px 20px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; flex-wrap: wrap; }
+.hamburger-btn { background: rgba(255,255,255,0.15); border: 1.5px solid rgba(255,255,255,0.35); color: #fff; border-radius: 8px; width: 34px; height: 34px; font-size: 16px; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.hamburger-btn:hover { background: rgba(255,255,255,0.28); }
+header h1 { font-size: 18px; font-weight: 700; }
+header .sub { font-size: 12px; opacity: .8; }
+header .win { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 12px; background: rgba(255,255,255,.15); border: 1.5px solid rgba(255,255,255,.35); border-radius: 20px; padding: 6px 14px; }
+header .win input[type=date] { border: none; border-radius: 4px; padding: 3px 5px; font-size: 12px; }
+header .win span.arrow { opacity:.7 }
+
+.main { display: flex; flex: 1; overflow: hidden; }
+.sidebar { width: 380px; flex-shrink: 0; background: #fff; border-right: 1px solid #dde1e7; display: flex; flex-direction: column; overflow-y: auto; }
+.sidebar.collapsed { display: none; }
+.content { flex: 1; overflow: auto; padding: 0; }
+.content-sticky { position: sticky; top: 0; z-index: 5; background: #f0f2f5; padding: 18px 22px 14px; }
+.content-body { padding: 0 22px 22px; }
+
+.sec { padding: 15px 18px; border-bottom: 1px solid #eef0f4; }
+.sec-title { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: #999; margin-bottom: 9px; }
+
+#bh-drop, #cd-drop { display: block; border: 2px dashed #d0d5dd; border-radius: 8px; padding: 14px 10px; text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
+#bh-drop:hover, #cd-drop:hover, .over { border-color: #c0392b; background: #fff5f5; }
+.drop-icon { font-size: 22px; margin-bottom: 3px; }
+.drop-lbl { font-size: 13px; font-weight: 600; color: #333; }
+.drop-sub { font-size: 12px; color: #aaa; margin-top: 2px; }
+.file-item { display: flex; justify-content: space-between; align-items: center; font-size: 12.5px; color: #555; padding: 3px 0; border-bottom: 1px solid #f0f2f5; }
+.file-item:last-child { border-bottom: none; }
+.file-item .fcount { color: #27ae60; font-weight: 600; flex-shrink:0; margin-left:6px; }
+.file-list { margin-top: 7px; }
+.hint { font-size: 12px; color: #999; margin-top: 7px; line-height: 1.55; }
+.hint b { color: #666; }
+.err { font-size: 12.5px; color: #c0392b; margin-top: 6px; }
+
+.btn { padding: 8px 14px; background: #c0392b; color: #fff; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .15s; }
+.btn:hover { background: #a93226; }
+.btn:disabled { background: #ccc; cursor: not-allowed; }
+.btn-outline { background: #fff; color: #c0392b; border: 1.5px solid #c0392b; }
+.btn-outline:hover { background: #fff5f5; }
+.btn-grey { background: #eceef1; color: #555; }
+.btn-grey:hover { background: #dfe2e7; }
+.btn-block { width: 100%; margin-top: 8px; }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn-row { display: flex; gap: 7px; margin-top: 8px; }
+.btn-row .btn { flex: 1; }
+
+.policy-card { background: #f7f8fa; border-radius: 7px; padding: 10px 12px; margin-bottom: 6px; font-size: 12px; color: #555; line-height: 1.6; }
+.policy-card b { color: #333; }
+.tier-table { width: 100%; font-size: 11.5px; margin-top: 6px; border-collapse: collapse; }
+.tier-table td { padding: 3px 4px; border-bottom: 1px solid #e7e9ec; }
+
+.status-line { font-size: 12.5px; color: #666; padding: 10px 18px; background: #f7f8fa; border-top: 1px solid #eef0f3; }
+
+/* Results */
+.summary-row { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.summary-card { background: #fff; border-radius: 9px; padding: 14px 18px; box-shadow: 0 1px 3px rgba(0,0,0,.07); min-width: 140px; flex: 1; }
+.summary-card .sc-label { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: .04em; }
+.summary-card .sc-value { font-size: 24px; font-weight: 700; color: #222; margin-top: 4px; }
+.summary-card.accent .sc-value { color: #c0392b; }
+
+table.results { width: 100%; border-collapse: separate; border-spacing: 0; background: #fff; border-radius: 9px; box-shadow: 0 1px 3px rgba(0,0,0,.07); font-size: 12.5px; }
+table.results tr:first-child th:first-child { border-top-left-radius: 9px; }
+table.results tr:first-child th:last-child { border-top-right-radius: 9px; }
+table.results th { background: #f7f8fa; color: #555; font-weight: 600; padding: 9px 8px; text-align: left; border-bottom: 1px solid #e4e7ec; white-space: nowrap; position: sticky; z-index: 4; }
+table.results td { padding: 8px 8px; border-bottom: 1px solid #f0f2f5; vertical-align: middle; }
+table.results tr.r-elig td { background: #f4fbf6; }
+table.results tr.r-pending td { background: #fffaf0; }
+table.results tr.r-fail td { background: #fff; }
+table.results tr.r-window td { background: #f7f7f7; color: #999; }
+table.results tr:hover td { background: #fdf4f3; cursor: pointer; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10.5px; font-weight: 700; color: #fff; white-space: nowrap; }
+.b-elig { background: #27ae60; }
+.b-pending { background: #e67e22; }
+.b-fail { background: #95a5a6; }
+.b-window { background: #7f8c8d; }
+.b-region { background: #2980b9; }
+
+.detail-row td { background: #fbfbfc; padding: 16px 20px; }
+.detail-grid { display: flex; gap: 24px; flex-wrap: wrap; }
+.detail-col { flex: 1; min-width: 280px; }
+.detail-col h4 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #999; margin-bottom: 8px; }
+.pol-row { display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; margin-bottom: 7px; }
+.pol-icon { flex-shrink: 0; font-size: 14px; width: 18px; text-align: center; }
+.pol-row .pol-label { font-weight: 600; color: #333; }
+.pol-row .pol-detail { color: #888; }
+table.fin { width: 100%; font-size: 12px; border-collapse: collapse; margin-bottom: 10px; }
+table.fin th, table.fin td { padding: 4px 6px; border-bottom: 1px solid #eef0f3; text-align: right; }
+table.fin th:first-child, table.fin td:first-child { text-align: left; }
+table.fin tr.total td { font-weight: 700; border-top: 2px solid #ddd; }
+.nearest-list { font-size: 11.5px; color: #666; }
+.nearest-list .nl-row { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 2px 4px; border-bottom: 1px solid #f0f2f5; cursor: default; border-radius: 3px; }
+.nearest-list .nl-row.out { color: #e67e22; }
+.nearest-list .nl-row.hl { background: #fdf4f3; }
+.nl-info { display: flex; justify-content: space-between; flex: 1; gap: 8px; }
+.nl-remove { flex-shrink: 0; background: none; border: none; color: #ccc; font-size: 14px; cursor: pointer; line-height: 1; padding: 0 2px; }
+.nl-remove:hover { color: #c0392b; }
+.pool-edit-row { display: flex; gap: 6px; margin-top: 8px; align-items: center; }
+.pool-edit-row select { flex: 1; min-width: 0; padding: 5px 7px; font-size: 12px; border: 1px solid #d0d5dd; border-radius: 5px; }
+.pool-reset-link { background: none; border: none; color: #2980b9; font-size: 11px; cursor: pointer; text-decoration: underline; padding: 0; }
+
+/* Renovation rate card */
+.reno-table { width: 100%; font-size: 12.5px; border-collapse: collapse; margin-bottom: 8px; }
+.reno-table th { text-align: left; color: #999; font-weight: 600; font-size: 10.5px; text-transform: uppercase; padding: 3px 4px; border-bottom: 1px solid #eef0f4; }
+.reno-table td { padding: 4px; border-bottom: 1px solid #f5f6f8; }
+.reno-table input[type=number] { width: 100%; padding: 4px 6px; font-size: 12.5px; border: 1px solid #d0d5dd; border-radius: 5px; }
+.reno-remove { background: none; border: none; color: #ccc; font-size: 14px; cursor: pointer; padding: 0 3px; }
+.reno-remove:hover { color: #c0392b; }
+.reno-save-msg { font-size: 11.5px; color: #27ae60; margin-top: 4px; min-height: 15px; }
+.empty-state { text-align: center; color: #aaa; padding: 60px 20px; font-size: 14px; }
+.empty-state .ei { font-size: 40px; margin-bottom: 10px; }
+
+/* Options panel */
+.opt-label { font-size: 12.5px; color: #555; display: block; margin-bottom: 4px; }
+.opt-select, .opt-input { width: 100%; padding: 7px 9px; border: 1px solid #d0d5dd; border-radius: 6px; font-size: 13px; color: #333; }
+.opt-line { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12.5px; color: #444; flex-wrap: wrap; }
+.opt-line input[type=checkbox] { width: 15px; height: 15px; flex-shrink: 0; }
+.opt-line input[type=number] { width: 60px; padding: 4px 6px; font-size: 12.5px; border-radius: 5px; border: 1px solid #d0d5dd; }
+
+/* Detail map */
+.detail-map { width: 100%; height: 240px; border-radius: 8px; margin-bottom: 10px; background: #eef0f3; }
+.map-note { font-size: 11.5px; color: #999; margin-bottom: 8px; }
+.detail-col.wide { flex: 1.4; min-width: 320px; }
+</style>
+</head>
+<body>
+<header>
+  <button class="hamburger-btn" id="hamburger-btn" onclick="toggleSidebar()" title="Hide/show sidebar">☰</button>
+  <div>
+    <h1>SPX Rent Incentive Calculator</h1>
+    <div class="sub">Expansions Rent Incentive Program &middot; PIC eligibility &amp; pay-out</div>
+  </div>
+  <div class="win">
+    <span>Program window</span>
+    <input type="date" id="prog-start" value="2026-06-01" onchange="onSettingsChange()">
+    <span class="arrow">&rarr;</span>
+    <input type="date" id="prog-end" value="2026-09-30" onchange="onSettingsChange()">
+  </div>
+</header>
+
+<div class="main">
+  <div class="sidebar" id="sidebar">
+
+    <div class="sec">
+      <div class="sec-title">1. Benchmark Hub Data <span style="text-transform:none;font-weight:400;color:#bbb">(optional if using overrides)</span></div>
+      <label id="bh-drop">
+        <input type="file" id="bh-file" style="display:none" multiple accept=".csv" onchange="handleBenchFiles(this.files)">
+        <div class="drop-icon">📂</div>
+        <div class="drop-lbl">Click or drop CSV files</div>
+        <div class="drop-sub">Same format as the Hub Rent Estimator export</div>
+      </label>
+      <div class="file-list" id="bh-file-list"></div>
+      <div class="hint" style="margin-top:10px;margin-bottom:0;text-align:center">— or link a Google Sheet (auto-updates) —</div>
+      <div id="bh-gsheet-linked-banner" style="display:none;background:#f0f8ff;border:1px solid #bdd7ee;border-radius:6px;padding:7px 10px;margin-top:7px;font-size:12px;color:#1a5276">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span>🔗 Linked &middot; synced <span id="bh-gsheet-synced-at">—</span></span>
+          <span>
+            <button onclick="refreshBenchGSheet()" style="background:none;border:none;color:#2980b9;font-size:11px;cursor:pointer;font-weight:600">↻ Refresh</button>
+            <button onclick="unlinkBenchGSheet()" style="background:none;border:none;color:#c0392b;font-size:11px;cursor:pointer;font-weight:600;margin-left:8px">✕ Unlink</button>
+          </span>
+        </div>
+        <div id="bh-gsheet-sync-err" style="color:#c0392b;margin-top:4px"></div>
+      </div>
+      <div id="bh-gsheet-input-row" style="display:flex;gap:7px;margin-top:7px">
+        <input type="text" id="bh-gsheet-url" placeholder="Paste Google Sheets link…" style="flex:1;min-width:0;border:1px solid #d0d5dd;border-radius:6px;padding:7px 9px;font-size:13px">
+        <button class="btn btn-sm" onclick="loadBenchGSheet()" style="flex-shrink:0">Link</button>
+      </div>
+      <div class="hint">Used as the comparison pool to compute each candidate's benchmark rent/sqm &mdash; see <b>Benchmark Options</b> below to choose how the pool is picked (nearest 12, same city/district, or a radius) and whether outliers and sublessor rates are adjusted. Optional <b>Lessor</b> column enables the sublessor adjustment. Once linked, a Google Sheet refreshes automatically every time the page opens. Sheet must be set to <b>Anyone with the link can view</b>. Tip: point it at the same sheet used by the <b>Hub Rent Estimator</b> so both tools always match.</div>
+      <div class="err" id="bh-err"></div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">2. Candidate Hubs</div>
+      <label id="cd-drop">
+        <input type="file" id="cd-file" style="display:none" multiple accept=".csv" onchange="handleCandFiles(this.files)">
+        <div class="drop-icon">📥</div>
+        <div class="drop-lbl">Click or drop CSV files</div>
+        <div class="drop-sub">Hubs being evaluated for the incentive</div>
+      </label>
+      <div class="file-list" id="cd-file-list"></div>
+      <div class="btn-row">
+        <button class="btn btn-outline btn-sm" onclick="downloadTemplate()">⬇ Download Template</button>
+        <button class="btn btn-grey btn-sm" onclick="loadSampleData()">▶ Load Sample</button>
+      </div>
+      <div class="hint">Required columns: <b>Hub Name, Latitude, Longitude, Actual Rent (Php/sqm), Size (sqm)</b>. Optional: Region, <b>Lease Start Date, Lease End Date</b> (lease duration is computed from these the same way the source sheet does &mdash; complete months between them, end date inclusive; a raw Lease Duration (months) column is used only if dates aren't given), Direct Lease (Yes/No), Utilization (%), Location Score (%), Go-Live Date, DD Complete (Yes/No), COL Signed (Yes/No), Escalation % (yearly), Actual Renovation Cost, <b>Benchmark Rent Override (Php/sqm)</b> &mdash; supply this to skip auto-computation. Benchmark Renovation Cost is auto-computed from a standard rate table by size (&#8369;1,867.45/sqm &le;400sqm, &#8369;950.91/sqm 401&ndash;800sqm, &#8369;572.02/sqm 801sqm+) &mdash; the CSV column overrides this if provided.</div>
+      <div class="err" id="cd-err"></div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">Benchmark Options</div>
+      <label class="opt-label">Comparison pool</label>
+      <select id="opt-pool-mode" class="opt-select" onchange="onPoolModeChange()" style="margin-bottom:8px">
+        <option value="nearest12" selected>Nearest 12 hubs (straight-line)</option>
+        <option value="city">Same city only</option>
+        <option value="district">Same district only</option>
+        <option value="radius">Within a radius</option>
+      </select>
+      <div id="opt-radius-row" style="display:none;margin-bottom:8px">
+        <label class="opt-label">Radius (km)</label>
+        <input type="number" id="opt-radius-km" class="opt-input" value="15" min="0" step="0.5">
+      </div>
+      <div class="opt-line">
+        <input type="checkbox" id="opt-excl-outliers" checked>
+        <span>Exclude statistical outliers</span>
+      </div>
+      <div class="opt-line">
+        <input type="checkbox" id="opt-sublessor" checked>
+        <span>Apply &minus;</span>
+        <input type="number" id="opt-sublessor-pct" value="10" min="0" max="100" step="0.1">
+        <span>% for sublessor benchmark hubs</span>
+      </div>
+      <div class="opt-line" style="margin-bottom:0">
+        <input type="checkbox" id="opt-routes">
+        <span>Show driving routes on hub map</span>
+      </div>
+      <div class="hint" style="margin-top:8px">"Same city/district" and driving routes look up boundaries and routes online (Nominatim/OSRM) when you evaluate or open a hub's map — this can take a few seconds per hub.</div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <span>Renovation Rate Card <span style="text-transform:none;font-weight:400;color:#bbb">(benchmark scenario)</span></span>
+        <button onclick="toggleRenoAdmin()" id="reno-admin-btn" style="background:none;border:none;font-size:11px;color:#aaa;cursor:pointer;text-decoration:underline;white-space:nowrap">🔒 Admin</button>
+      </div>
+      <div id="reno-pin-row" style="display:none;margin-bottom:8px">
+        <div style="display:flex;gap:6px">
+          <input type="password" id="reno-pin-input" placeholder="Enter PIN…" style="flex:1;min-width:0;border:1px solid #d0d5dd;border-radius:6px;padding:7px 9px;font-size:13px" onkeydown="if(event.key==='Enter')checkRenoPin()">
+          <button class="btn btn-sm" onclick="checkRenoPin()">Unlock</button>
+        </div>
+        <div id="reno-pin-err" class="err"></div>
+      </div>
+      <div id="reno-rate-body"></div>
+      <div class="hint" style="margin-top:8px">Benchmark Renovation Cost = rate &times; hub size, using the largest bracket the size qualifies for. Editing requires the admin PIN. Changes apply the next time you click <b>Evaluate Incentives</b>.</div>
+    </div>
+
+    <div class="sec">
+      <button class="btn btn-block" id="eval-btn" onclick="evaluateAll()" disabled>Evaluate Incentives</button>
+      <button class="btn btn-grey btn-block" onclick="clearAll()">Clear All Data</button>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">Policy Reference</div>
+      <div class="policy-card"><b>All 7 must pass</b> to qualify (plus go-live inside the program window):<br>
+      1. Direct leasing (no sublease)<br>
+      2. Rent &ge;15% below benchmark<br>
+      3. Utilization &ge; MM/NCR 65%, GMA/SOL/NOL 60%, VIS/MIN 40%<br>
+      4. Total contract savings &ge; &#8369;1,000,000<br>
+      5. Lease duration &ge; 24 months<br>
+      6. Location scorecard &ge; 75%<br>
+      7. DD complete + COL signed (6-month grace from go-live)
+      </div>
+      <table class="tier-table">
+        <tr><td colspan="2" style="font-weight:700;color:#333">Reward tier (total contract savings %)</td></tr>
+        <tr><td>15% &ndash; 25%</td><td style="text-align:right">&#8369;15/sqm</td></tr>
+        <tr><td>25.1% &ndash; 50%</td><td style="text-align:right">&#8369;30/sqm</td></tr>
+        <tr><td>50.1%+</td><td style="text-align:right">&#8369;45/sqm</td></tr>
+        <tr><td style="padding-top:6px">Max per hub</td><td style="text-align:right;padding-top:6px;font-weight:700">&#8369;50,000</td></tr>
+      </table>
+    </div>
+
+    <div style="flex:1"></div>
+    <div class="status-line" id="status-bar">Upload candidate hubs (and optionally benchmark data) to begin.</div>
+  </div>
+
+  <div class="content" id="content">
+    <div class="empty-state" id="empty-state">
+      <div class="ei">🏠</div>
+      No results yet. Upload candidate hub data and click <b>Evaluate Incentives</b>.
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+'use strict';
+/* ═══════ CONSTANTS ═══════ */
+const K_NEAREST = 12;
+const CAP = 50000;
+
+/* ═══════ STATE ═══════ */
+let benchHubs = JSON.parse(localStorage.getItem('inc_benchHubs') || '[]');
+let candidates = JSON.parse(localStorage.getItem('inc_candidates') || '[]');
+let results = [];
+let expandedIdx = null;
+let detailMap = null;
+let detailRouteLayers = [];
+let detailMarkers = [];
+const geoCache = JSON.parse(localStorage.getItem('inc_geoCache') || '{}');
+function saveGeoCache() { try { localStorage.setItem('inc_geoCache', JSON.stringify(geoCache)); } catch(e) {} }
+
+/* ═══════ CSV TOKENIZER (shared) ═══════ */
+function tokenizeCSV(raw) {
+  const recs=[]; let rec=[],field='',inQ=false,i=0;
+  const push=()=>{rec.push(field.trim());field='';};
+  const flush=()=>{push(); if(rec.some(f=>f)) recs.push(rec); rec=[];};
+  while (i<raw.length) {
+    const ch=raw[i];
+    if (inQ) {
+      if (ch==='"') { raw[i+1]==='"'?(field+='"',i+=2):(inQ=false,i++); }
+      else { field+=ch; i++; }
+    } else {
+      if      (ch==='"')                    { inQ=true; i++; }
+      else if (ch===',')                    { push(); i++; }
+      else if (ch==='\r'&&raw[i+1]==='\n') { flush(); i+=2; }
+      else if (ch==='\n')                   { flush(); i++; }
+      else                                  { field+=ch; i++; }
+    }
+  }
+  push(); if(rec.some(f=>f)) recs.push(rec);
+  return recs;
+}
+function normHeaders(headers) { return headers.map(x=>x.toLowerCase().replace(/[\s_]+/g,' ').trim()); }
+function readFileAsText(file) {
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onerror=()=>reject(new Error('Could not read '+file.name));
+    reader.onload=e=>{
+      const buf=e.target.result, bytes=new Uint8Array(buf.slice(0,3));
+      let enc='utf-8';
+      if (bytes[0]===0xFF&&bytes[1]===0xFE) enc='utf-16le';
+      else if (bytes[0]===0xFE&&bytes[1]===0xFF) enc='utf-16be';
+      resolve(new TextDecoder(enc).decode(buf).replace(/^﻿/,''));
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+function parseNum(v) { if (v===undefined||v===null||v==='') return null; const n=parseFloat(String(v).replace(/[₱,%\s]/g,'')); return isNaN(n)?null:n; }
+function parseYesNo(v) { const s=(v||'').trim().toLowerCase(); if(!s) return null; if(['y','yes','true','1'].includes(s)) return true; if(['n','no','false','0'].includes(s)) return false; return null; }
+function parseDateVal(v) { if(!v) return null; const d=new Date(v); return isNaN(d.getTime())?null:d; }
+/* Replicates the source sheet's =DATEDIF(start, end+1, "M") — complete months between two
+   dates, with the end date treated as inclusive (the +1 day is what makes it inclusive). */
+function leaseMonthsFromDates(start, end) {
+  if (!start || !end) return null;
+  const endIncl = new Date(end.getTime()); endIncl.setDate(endIncl.getDate()+1);
+  let months = (endIncl.getFullYear()-start.getFullYear())*12 + (endIncl.getMonth()-start.getMonth());
+  if (endIncl.getDate() < start.getDate()) months--;
+  return Math.max(0, months);
+}
+
+/* ═══════ BENCHMARK HUB CSV (same schema as Hub Rent Estimator) ═══════ */
+const validPH = (la,ln) => la>=3&&la<=22&&ln>=115&&ln<=131;
+function detectBenchCols(headers) {
+  const h = normHeaders(headers);
+  const find = (...kw) => h.findIndex(c=>kw.some(k=>c.includes(k)));
+  const nameIdx=find('hub','name','station','location','branch');
+  const rentIdx=find('rate per sqm','rent per sqm','rate','rent','price','sqm');
+  const latIdx=find('lat');
+  const lngIdx=find('lon','lng','long');
+  const regionIdx=find('region','zone');
+  const lessorIdx=find('lessor','landlord','owner type','type of lessor');
+  const miss=[]; if(rentIdx<0) miss.push('Rent/Rate'); if(latIdx<0) miss.push('Latitude'); if(lngIdx<0) miss.push('Longitude');
+  if (miss.length) throw new Error('Cannot find columns: '+miss.join(', '));
+  return {nameIdx,rentIdx,latIdx,lngIdx,regionIdx,lessorIdx};
+}
+function parseBenchCSV(raw) {
+  const recs = tokenizeCSV(raw.replace(/^﻿/,''));
+  if (recs.length<2) throw new Error('Need a header row and at least one data row.');
+  const cols = detectBenchCols(recs[0]);
+  const rows=[]; let skipped=0;
+  for (let i=1;i<recs.length;i++) {
+    const p=recs[i];
+    const rent=parseNum(p[cols.rentIdx]);
+    let la=parseNum(p[cols.latIdx]), ln=parseNum(p[cols.lngIdx]);
+    if (rent===null||rent===0||la===null||ln===null) { skipped++; continue; }
+    if (!validPH(la,ln)&&validPH(ln,la)) [la,ln]=[ln,la];
+    if (!validPH(la,ln)) { skipped++; continue; }
+    rows.push({
+      name: cols.nameIdx>=0?(p[cols.nameIdx]||`Hub ${i}`):`Hub ${i}`,
+      rent, lat:la, lng:ln,
+      region: cols.regionIdx>=0?(p[cols.regionIdx]||'').toUpperCase().trim():'',
+      lessor: cols.lessorIdx>=0?(p[cols.lessorIdx]||'').trim():''
+    });
+  }
+  if (!rows.length) throw new Error('No valid rows found. Check Latitude, Longitude, Rate columns.');
+  return {rows, skipped};
+}
+
+/* ═══════ CANDIDATE HUB CSV ═══════ */
+function detectCandCols(headers) {
+  const h = normHeaders(headers);
+  const find = (...kw) => h.findIndex(c=>kw.some(k=>c.includes(k)));
+  const cols = {
+    nameIdx: find('hub name','name','hub','station'),
+    regionIdx: find('region'),
+    latIdx: find('lat'),
+    lngIdx: find('lon','lng','long'),
+    rentIdx: find('actual rent','actual rate','rent','rate','price'),
+    sizeIdx: find('size','floor area'),
+    leaseMonthsIdx: find('lease duration','duration','term'),
+    leaseStartIdx: find('lease start date','start date'),
+    leaseEndIdx: find('lease end date','end date'),
+    directLeaseIdx: find('direct lease','direct','leasing arrangement'),
+    utilizationIdx: find('utilization'),
+    locationScoreIdx: find('location score','scorecard'),
+    goLiveIdx: find('go-live','go live','golive'),
+    ddIdx: find('dd complete','due diligence'),
+    colIdx: find('col signed','contract of lease','col'),
+    escalationIdx: find('escalation'),
+    renoActualIdx: find('actual renovation'),
+    renoBenchIdx: find('benchmark renovation'),
+    overrideIdx: find('benchmark rent override','benchmark override','benchmark rent'),
+    picIdx: find('pic')
+  };
+  if (cols.renoActualIdx<0) cols.renoActualIdx = find('renovation');
+  const miss=[];
+  if (cols.latIdx<0) miss.push('Latitude'); if (cols.lngIdx<0) miss.push('Longitude');
+  if (cols.rentIdx<0) miss.push('Actual Rent'); if (cols.sizeIdx<0) miss.push('Size (sqm)');
+  if (miss.length) throw new Error('Cannot find columns: '+miss.join(', '));
+  return cols;
+}
+function parseCandCSV(raw) {
+  const recs = tokenizeCSV(raw.replace(/^﻿/,''));
+  if (recs.length<2) throw new Error('Need a header row and at least one data row.');
+  const c = detectCandCols(recs[0]);
+  const rows=[]; let skipped=0;
+  for (let i=1;i<recs.length;i++) {
+    const p=recs[i];
+    const lat=parseNum(p[c.latIdx]), lng=parseNum(p[c.lngIdx]);
+    const actualRent=parseNum(p[c.rentIdx]), size=parseNum(p[c.sizeIdx]);
+    if (lat===null||lng===null||actualRent===null||size===null) { skipped++; continue; }
+    const leaseStart = c.leaseStartIdx>=0?parseDateVal(p[c.leaseStartIdx]):null;
+    const leaseEnd = c.leaseEndIdx>=0?parseDateVal(p[c.leaseEndIdx]):null;
+    const leaseMonthsFromDatesVal = leaseMonthsFromDates(leaseStart, leaseEnd);
+    rows.push({
+      name: c.nameIdx>=0?(p[c.nameIdx]||`Candidate ${i}`):`Candidate ${i}`,
+      region: c.regionIdx>=0?(p[c.regionIdx]||'').toUpperCase().trim():'',
+      lat, lng, actualRent, size,
+      leaseStart, leaseEnd,
+      leaseMonths: leaseMonthsFromDatesVal!==null ? leaseMonthsFromDatesVal : (c.leaseMonthsIdx>=0?parseNum(p[c.leaseMonthsIdx]):null),
+      directLease: c.directLeaseIdx>=0?parseYesNo(p[c.directLeaseIdx]):null,
+      utilization: c.utilizationIdx>=0?parseNum(p[c.utilizationIdx]):null,
+      locationScore: c.locationScoreIdx>=0?parseNum(p[c.locationScoreIdx]):null,
+      goLive: c.goLiveIdx>=0?parseDateVal(p[c.goLiveIdx]):null,
+      ddComplete: c.ddIdx>=0?(parseYesNo(p[c.ddIdx])===true):false,
+      colSigned: c.colIdx>=0?(parseYesNo(p[c.colIdx])===true):false,
+      escalation: c.escalationIdx>=0?(parseNum(p[c.escalationIdx])||0):0,
+      renoActual: c.renoActualIdx>=0?(parseNum(p[c.renoActualIdx])||0):0,
+      renoBench: c.renoBenchIdx>=0?parseNum(p[c.renoBenchIdx]):null,
+      benchmarkOverride: c.overrideIdx>=0?parseNum(p[c.overrideIdx]):null,
+      pic: c.picIdx>=0?(p[c.picIdx]||''):''
+    });
+  }
+  if (!rows.length) throw new Error('No valid rows found. Check Latitude, Longitude, Actual Rent, Size columns.');
+  return {rows, skipped};
+}
+
+/* ═══════ FILE HANDLING ═══════ */
+function setBenchErr(m){ document.getElementById('bh-err').textContent = m?'⚠ '+m:''; }
+function setCandErr(m){ document.getElementById('cd-err').textContent = m?'⚠ '+m:''; }
+
+function handleBenchFiles(fileList) {
+  const files=Array.from(fileList); if(!files.length) return;
+  setBenchErr('');
+  Promise.all(files.map(f=>readFileAsText(f).then(text=>({file:f,text})))).then(results=>{
+    const all=[]; const infos=[]; let skipped=0;
+    for (const {file,text} of results) {
+      try { const {rows,skipped:sk}=parseBenchCSV(text); all.push(...rows); skipped+=sk; infos.push({name:file.name,count:rows.length,err:null}); }
+      catch(e) { infos.push({name:file.name,count:0,err:e.message}); }
+    }
+    document.getElementById('bh-file-list').innerHTML = infos.map(f=>
+      `<div class="file-item"><span>📄 ${esc(f.name)}</span>${f.err?`<span style="color:#c0392b;font-size:11px">⚠ ${esc(f.err)}</span>`:`<span class="fcount">${f.count.toLocaleString()} hubs</span>`}</div>`
+    ).join('');
+    if (!all.length) { setBenchErr('No valid benchmark hub rows found.'); return; }
+    benchHubs = all;
+    localStorage.setItem('inc_benchHubs', JSON.stringify(benchHubs));
+    updateStatus();
+  }).catch(e=>setBenchErr('Error reading files: '+e.message));
+}
+
+/* ═══════ BENCHMARK — LIVE GOOGLE SHEET LINK ═══════ */
+async function fetchFromBenchGSheet(raw, opts) {
+  opts = opts || {};
+  const m = raw.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+  if (!m) {
+    if (opts.silent) setBenchGSheetSyncErr('Saved link is not a valid Google Sheets URL.');
+    else setBenchErr('Could not find a Sheet ID in that URL. Make sure it\'s a Google Sheets link.');
+    return false;
+  }
+  const sheetId = m[1];
+  const gidM = raw.match(/[#&?]gid=(\d+)/);
+  const gid = gidM ? gidM[1] : '0';
+  const exportUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
+  if (!opts.silent) {
+    setBenchErr('');
+    document.getElementById('bh-file-list').innerHTML = '<div class="file-item"><span>⏳ Fetching sheet…</span></div>';
+  }
+  try {
+    const resp = await fetch(exportUrl);
+    if (!resp.ok) {
+      if (resp.status === 403) throw new Error('Sheet is not public. Set sharing to "Anyone with the link can view".');
+      throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+    }
+    const text = await resp.text();
+    const {rows} = parseBenchCSV(text);
+    if (!rows.length) throw new Error('No valid benchmark hub rows found in the sheet.');
+    benchHubs = rows;
+    localStorage.setItem('inc_benchHubs', JSON.stringify(benchHubs));
+    document.getElementById('bh-file-list').innerHTML =
+      `<div class="file-item"><span>📊 Google Sheet</span><span class="fcount">${rows.length.toLocaleString()} hubs</span></div>`;
+    localStorage.setItem('inc_benchGSheetUrl', raw);
+    localStorage.setItem('inc_benchGSheetSyncedAt', new Date().toLocaleString());
+    showBenchGSheetLinked();
+    updateStatus();
+    return true;
+  } catch(e) {
+    if (opts.silent) setBenchGSheetSyncErr('Could not refresh (' + e.message + ') — showing last synced data.');
+    else { document.getElementById('bh-file-list').innerHTML=''; setBenchErr('Google Sheets error: ' + e.message); }
+    return false;
+  }
+}
+function loadBenchGSheet() {
+  const raw = document.getElementById('bh-gsheet-url').value.trim();
+  if (!raw) { setBenchErr('Paste a Google Sheets link first.'); return; }
+  fetchFromBenchGSheet(raw, {silent:false});
+}
+function refreshBenchGSheet() {
+  const url = localStorage.getItem('inc_benchGSheetUrl');
+  if (!url) return;
+  setBenchGSheetSyncErr('Refreshing…');
+  fetchFromBenchGSheet(url, {silent:true});
+}
+function unlinkBenchGSheet() {
+  localStorage.removeItem('inc_benchGSheetUrl');
+  localStorage.removeItem('inc_benchGSheetSyncedAt');
+  document.getElementById('bh-gsheet-url').value = '';
+  showBenchGSheetLinked();
+}
+function setBenchGSheetSyncErr(msg) {
+  const el = document.getElementById('bh-gsheet-sync-err');
+  if (el) el.textContent = msg || '';
+}
+function showBenchGSheetLinked() {
+  const url = localStorage.getItem('inc_benchGSheetUrl');
+  const at = localStorage.getItem('inc_benchGSheetSyncedAt');
+  const banner = document.getElementById('bh-gsheet-linked-banner');
+  const inputRow = document.getElementById('bh-gsheet-input-row');
+  if (!url) { banner.style.display='none'; inputRow.style.display='flex'; return; }
+  banner.style.display='block';
+  inputRow.style.display='none';
+  document.getElementById('bh-gsheet-synced-at').textContent = at || 'just now';
+  setBenchGSheetSyncErr('');
+}
+function initBenchGSheetLink() {
+  const url = localStorage.getItem('inc_benchGSheetUrl');
+  if (!url) return;
+  document.getElementById('bh-gsheet-url').value = url;
+  showBenchGSheetLinked();
+  fetchFromBenchGSheet(url, {silent:true});
+}
+
+function handleCandFiles(fileList) {
+  const files=Array.from(fileList); if(!files.length) return;
+  setCandErr('');
+  Promise.all(files.map(f=>readFileAsText(f).then(text=>({file:f,text})))).then(results=>{
+    const all=[]; const infos=[];
+    for (const {file,text} of results) {
+      try { const {rows}=parseCandCSV(text); all.push(...rows); infos.push({name:file.name,count:rows.length,err:null}); }
+      catch(e) { infos.push({name:file.name,count:0,err:e.message}); }
+    }
+    document.getElementById('cd-file-list').innerHTML = infos.map(f=>
+      `<div class="file-item"><span>📄 ${esc(f.name)}</span>${f.err?`<span style="color:#c0392b;font-size:11px">⚠ ${esc(f.err)}</span>`:`<span class="fcount">${f.count.toLocaleString()} hubs</span>`}</div>`
+    ).join('');
+    if (!all.length) { setCandErr('No valid candidate rows found.'); return; }
+    candidates = all;
+    localStorage.setItem('inc_candidates', JSON.stringify(candidates));
+    updateStatus();
+  }).catch(e=>setCandErr('Error reading files: '+e.message));
+}
+
+function clearAll() {
+  benchHubs=[]; candidates=[]; results=[];
+  localStorage.removeItem('inc_benchHubs'); localStorage.removeItem('inc_candidates');
+  document.getElementById('bh-file-list').innerHTML=''; document.getElementById('cd-file-list').innerHTML='';
+  setBenchErr(''); setCandErr('');
+  document.getElementById('content').innerHTML = `<div class="empty-state" id="empty-state"><div class="ei">🏠</div>No results yet. Upload candidate hub data and click <b>Evaluate Incentives</b>.</div>`;
+  updateStatus();
+}
+
+function updateStatus() {
+  document.getElementById('eval-btn').disabled = candidates.length===0;
+  const parts=[];
+  if (benchHubs.length) parts.push(`${benchHubs.length.toLocaleString()} benchmark hubs loaded`);
+  if (candidates.length) parts.push(`${candidates.length.toLocaleString()} candidate hubs loaded`);
+  document.getElementById('status-bar').textContent = parts.length ? parts.join(' · ') : 'Upload candidate hubs (and optionally benchmark data) to begin.';
+}
+
+function onSettingsChange() { if (results.length) evaluateAll(); }
+
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const willCollapse = !sidebar.classList.contains('collapsed');
+  sidebar.classList.toggle('collapsed', willCollapse);
+  localStorage.setItem('inc_sidebarCollapsed', willCollapse ? '1' : '0');
+  if (!detailMap) return;
+  setTimeout(() => detailMap && detailMap.invalidateSize(), 220);
+}
+
+/* ═══════ SAMPLE / TEMPLATE ═══════ */
+const SAMPLE_CSV_HEADERS = ['Hub Name','Region','Latitude','Longitude','Actual Rent (Php/sqm)','Size (sqm)','Lease Start Date','Lease End Date','Lease Duration (months)','Direct Lease (Yes/No)','Utilization (%)','Location Score (%)','Go-Live Date','DD Complete (Yes/No)','COL Signed (Yes/No)','Escalation % (yearly)','Actual Renovation Cost','Benchmark Renovation Cost','Benchmark Rent Override (Php/sqm)','PIC Name'];
+const SAMPLE_CSV_ROWS = [
+  ['Gensan Lagao Hub','MIN','6.1164','125.1716','101.82','1100','2026-07-15','2028-07-14','','Yes','45','80','2026-07-15','Yes','Yes','5','846776','','189','Juan Dela Cruz'],
+  ['San Roque Hub','GMA','14.35','121.05','138','759','2026-08-01','2029-07-31','','Yes','62','78','2026-08-01','Yes','Yes','5','629834','','181','Maria Santos']
+];
+function buildSampleCSV() {
+  const rows=[SAMPLE_CSV_HEADERS, ...SAMPLE_CSV_ROWS];
+  return rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');
+}
+function downloadTemplate() {
+  const csv = buildSampleCSV();
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);
+  a.download='candidate-hubs-template.csv';
+  a.click();
+}
+function loadSampleData() {
+  const {rows} = parseCandCSV(buildSampleCSV());
+  candidates = rows;
+  localStorage.setItem('inc_candidates', JSON.stringify(candidates));
+  document.getElementById('cd-file-list').innerHTML = `<div class="file-item"><span>▶ Sample data</span><span class="fcount">${rows.length} hubs</span></div>`;
+  setCandErr('');
+  updateStatus();
+  evaluateAll();
+}
+
+/* ═══════ MATH HELPERS ═══════ */
+function hav(la1,ln1,la2,ln2) {
+  const R=6371,r=Math.PI/180,dL=(la2-la1)*r,dG=(ln2-ln1)*r;
+  const a=Math.sin(dL/2)**2+Math.cos(la1*r)*Math.cos(la2*r)*Math.sin(dG/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+function detectOutliers(values) {
+  if (values.length<4) return values.map(()=>false);
+  const s=[...values].sort((a,b)=>a-b), n=s.length;
+  const q1=s[Math.floor(n/4)], q3=s[Math.floor(3*n/4)], iqr=q3-q1;
+  return values.map(v=>v<q1-1.5*iqr||v>q3+1.5*iqr);
+}
+/* Standard renovation cost rate card (Php/sqm), by hub size — from the source workbook's
+   VLOOKUP table, confirmed identical across every sample-calc sheet. Used to auto-compute
+   Benchmark Renovation Cost when a candidate doesn't supply an override. */
+const RENO_RATE_TABLE_DEFAULT = [ {minSize:0,rate:1867.45}, {minSize:401,rate:950.91}, {minSize:801,rate:572.02} ];
+const RENO_ADMIN_PIN = '2026';
+let renoRateTable = loadRenoRateTable();
+function loadRenoRateTable() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('inc_renoRateTable'));
+    if (Array.isArray(saved) && saved.length) return saved;
+  } catch(e) {}
+  return RENO_RATE_TABLE_DEFAULT.map(t=>({...t}));
+}
+function standardRenoRate(size) {
+  const sorted = [...renoRateTable].sort((a,b)=>a.minSize-b.minSize);
+  let rate = sorted.length ? sorted[0].rate : 0;
+  for (const tier of sorted) { if (size>=tier.minSize) rate=tier.rate; }
+  return rate;
+}
+function standardRenoCost(size) { return standardRenoRate(size)*size; }
+
+/* ═══════ RENOVATION RATE CARD — ADMIN-GATED EDITING ═══════ */
+function isRenoAdmin() { return sessionStorage.getItem('inc_renoAdmin')==='1'; }
+function toggleRenoAdmin() {
+  if (isRenoAdmin()) { lockRenoAdmin(); return; }
+  const row = document.getElementById('reno-pin-row');
+  row.style.display = row.style.display==='none' ? 'block' : 'none';
+}
+function checkRenoPin() {
+  const val = document.getElementById('reno-pin-input').value;
+  if (val === RENO_ADMIN_PIN) {
+    sessionStorage.setItem('inc_renoAdmin','1');
+    document.getElementById('reno-pin-row').style.display = 'none';
+    document.getElementById('reno-pin-input').value = '';
+    document.getElementById('reno-pin-err').textContent = '';
+    document.getElementById('reno-admin-btn').textContent = '🔓 Admin';
+    renderRenoRateTable();
+  } else {
+    document.getElementById('reno-pin-err').textContent = 'Incorrect PIN.';
+  }
+}
+function lockRenoAdmin() {
+  sessionStorage.removeItem('inc_renoAdmin');
+  document.getElementById('reno-pin-row').style.display = 'none';
+  document.getElementById('reno-admin-btn').textContent = '🔒 Admin';
+  renderRenoRateTable();
+}
+function readRenoInputsIntoState() {
+  if (!isRenoAdmin()) return;
+  renoRateTable.forEach((t,i)=>{
+    const minEl = document.getElementById('reno-min-'+i);
+    const rateEl = document.getElementById('reno-rate-'+i);
+    if (minEl) t.minSize = parseFloat(minEl.value) || 0;
+    if (rateEl) t.rate = parseFloat(rateEl.value) || 0;
+  });
+}
+function addRenoTier() {
+  readRenoInputsIntoState();
+  renoRateTable.push({minSize:0, rate:0});
+  renderRenoRateTable();
+}
+function removeRenoTier(i) {
+  if (renoRateTable.length<=1) return;
+  readRenoInputsIntoState();
+  renoRateTable.splice(i,1);
+  renderRenoRateTable();
+}
+function saveRenoRates() {
+  readRenoInputsIntoState();
+  renoRateTable.sort((a,b)=>a.minSize-b.minSize);
+  localStorage.setItem('inc_renoRateTable', JSON.stringify(renoRateTable));
+  renderRenoRateTable();
+  const msg = document.getElementById('reno-save-msg');
+  if (msg) { msg.textContent = '✓ Saved — click Evaluate Incentives to apply.'; setTimeout(()=>{ if(msg) msg.textContent=''; }, 4000); }
+}
+function resetRenoRatesDefault() {
+  renoRateTable = RENO_RATE_TABLE_DEFAULT.map(t=>({...t}));
+  localStorage.setItem('inc_renoRateTable', JSON.stringify(renoRateTable));
+  renderRenoRateTable();
+}
+function renderRenoRateTable() {
+  const body = document.getElementById('reno-rate-body');
+  if (!body) return;
+  const sorted = [...renoRateTable].sort((a,b)=>a.minSize-b.minSize);
+  const idxOf = t => renoRateTable.indexOf(t);
+  if (!isRenoAdmin()) {
+    body.innerHTML = `<table class="reno-table"><tr><th>Min size (sqm)</th><th>Rate (₱/sqm)</th></tr>
+      ${sorted.map(t=>`<tr><td>${t.minSize.toLocaleString()}</td><td>₱${t.rate.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr>`).join('')}
+    </table>`;
+    return;
+  }
+  body.innerHTML = `<table class="reno-table"><tr><th>Min size (sqm)</th><th>Rate (₱/sqm)</th><th></th></tr>
+    ${sorted.map(t=>{ const i=idxOf(t); return `<tr>
+      <td><input type="number" id="reno-min-${i}" value="${t.minSize}" min="0" step="1"></td>
+      <td><input type="number" id="reno-rate-${i}" value="${t.rate}" min="0" step="0.01"></td>
+      <td><button class="reno-remove" onclick="removeRenoTier(${i})" title="Remove tier">✕</button></td>
+    </tr>`; }).join('')}
+  </table>
+  <div class="btn-row" style="margin-top:0">
+    <button class="btn btn-grey btn-sm" onclick="addRenoTier()">+ Add Tier</button>
+    <button class="btn btn-sm" onclick="saveRenoRates()">💾 Save</button>
+  </div>
+  <div style="margin-top:6px;display:flex;justify-content:space-between;align-items:center">
+    <button class="pool-reset-link" onclick="resetRenoRatesDefault()">↺ Reset to default</button>
+    <button class="pool-reset-link" style="color:#c0392b" onclick="lockRenoAdmin()">🔒 Lock</button>
+  </div>
+  <div class="reno-save-msg" id="reno-save-msg"></div>`;
+}
+
+function utilizationThreshold(region) {
+  const r=(region||'').toUpperCase().trim();
+  if (['MM','NCR'].includes(r)) return 65;
+  if (['GMA','SOL','NOL'].includes(r)) return 60;
+  if (['VIS','MIN'].includes(r)) return 40;
+  return null;
+}
+function projectContract(rentPerSqm, size, escalationPct, years, renovation) {
+  // Matches the source workbook: escalation compounds at full precision — only
+  // final totals get rounded (at display time via money()), never intermediate years.
+  const yearAmts=[]; let amt=rentPerSqm*size*12;
+  for (let y=1;y<=years;y++) { if (y>1) amt=amt*(1+escalationPct/100); yearAmts.push(amt); }
+  const total = renovation + yearAmts.reduce((a,b)=>a+b,0);
+  return { years: yearAmts, renovation, total };
+}
+
+/* ═══════ REVERSE GEOCODING (for city/district pool modes) ═══════ */
+async function reverseGeocodeZoom(lat, lng, zoom) {
+  const key = lat.toFixed(4)+','+lng.toFixed(4)+'_z'+zoom;
+  if (geoCache[key]) return geoCache[key];
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=${zoom}&addressdetails=1`,
+      {headers:{'Accept-Language':'en'}});
+    const j = await r.json();
+    geoCache[key] = j; saveGeoCache();
+    return j;
+  } catch(e) { return null; }
+}
+function bboxOf(geo) {
+  if (!geo || !geo.boundingbox) return null;
+  return [parseFloat(geo.boundingbox[0]), parseFloat(geo.boundingbox[1]), parseFloat(geo.boundingbox[2]), parseFloat(geo.boundingbox[3])];
+}
+
+/* ═══════ BENCHMARK POOL SELECTION ═══════ */
+async function selectBenchmarkPool(c, opts) {
+  const candName = (c.name||'').toLowerCase().trim();
+  const withDist = benchHubs
+    .map(h=>({...h, dist: hav(c.lat,c.lng,h.lat,h.lng)}))
+    // Exclude the candidate hub itself if it's also present in the benchmark dataset
+    // (same coordinates, or same name) — otherwise it ends up in its own comparison pool.
+    .filter(h => h.dist>=0.05 && (h.name||'').toLowerCase().trim()!==candName)
+    .sort((a,b)=>a.dist-b.dist);
+  let pool = null, fellBack = false, poolLabel = 'Nearest 12 hubs';
+
+  if (opts.poolMode === 'city' || opts.poolMode === 'district') {
+    const zoom = opts.poolMode === 'city' ? 10 : 14;
+    const geo = await reverseGeocodeZoom(c.lat, c.lng, zoom);
+    const bbox = bboxOf(geo);
+    if (bbox) {
+      const [s,n,w,e] = bbox;
+      const inBox = withDist.filter(h=>h.lat>=s&&h.lat<=n&&h.lng>=w&&h.lng<=e).slice(0, K_NEAREST);
+      if (inBox.length) { pool = inBox; poolLabel = opts.poolMode === 'city' ? 'Same city' : 'Same district'; }
+    }
+    if (!pool) { fellBack = true; }
+  } else if (opts.poolMode === 'radius') {
+    const radius = opts.radiusKm;
+    if (radius > 0) {
+      const within = withDist.filter(h=>h.dist<=radius);
+      if (within.length) { pool = within; poolLabel = `Within ${radius} km`; }
+    }
+    if (!pool) { fellBack = true; }
+  }
+
+  if (!pool) pool = withDist.slice(0, Math.min(K_NEAREST, withDist.length));
+  return { pool, poolLabel, fellBack };
+}
+function applyBenchAdjustments(pool, opts) {
+  const adjusted = pool.map(h=>{
+    const isSub = opts.sublessorOn && h.lessor && h.lessor.toLowerCase().includes('sub');
+    return { ...h, rent: isSub ? h.rent*(1-opts.sublessorPct/100) : h.rent, _subAdjusted: isSub, _origRent: h.rent };
+  });
+  const flags = opts.exclOutliers ? detectOutliers(adjusted.map(h=>h.rent)) : adjusted.map(()=>false);
+  return adjusted.map((h,i)=>({...h, outlier: flags[i]}));
+}
+
+/* ═══════ EVALUATION ═══════ */
+async function evaluateCandidate(c, progStart, progEnd, today, opts) {
+  const r = { c, optsUsed: opts };
+  let benchmarkRent, usedOverride=false, nearestUsed=[], poolLabel='', poolFellBack=false;
+  if (c.benchmarkOverride!==null && c.benchmarkOverride!==undefined) {
+    benchmarkRent = c.benchmarkOverride; usedOverride = true;
+  } else if (c._manualPool && c._manualPool.length) {
+    poolLabel = 'Manual selection';
+    const withDist = c._manualPool.map(h=>({...h, dist: hav(c.lat,c.lng,h.lat,h.lng)})).sort((a,b)=>a.dist-b.dist);
+    nearestUsed = applyBenchAdjustments(withDist, opts);
+    const usePool = nearestUsed.filter(h=>!h.outlier);
+    const finalPool = usePool.length ? usePool : nearestUsed;
+    benchmarkRent = finalPool.reduce((s,h)=>s+h.rent,0)/finalPool.length;
+  } else if (benchHubs.length) {
+    const {pool, poolLabel: pl, fellBack} = await selectBenchmarkPool(c, opts);
+    poolLabel = pl; poolFellBack = fellBack;
+    nearestUsed = applyBenchAdjustments(pool, opts);
+    const usePool = nearestUsed.filter(h=>!h.outlier);
+    const finalPool = usePool.length ? usePool : nearestUsed;
+    benchmarkRent = finalPool.reduce((s,h)=>s+h.rent,0)/finalPool.length;
+  } else {
+    r.error = 'No benchmark hub data uploaded and no Benchmark Rent Override provided.';
+    return r;
+  }
+  r.benchmarkRent = benchmarkRent; r.usedOverride = usedOverride; r.nearestUsed = nearestUsed;
+  r.poolLabel = poolLabel; r.poolFellBack = poolFellBack;
+
+  const inWindow = c.goLive ? (c.goLive>=progStart && c.goLive<=progEnd) : null;
+  r.inWindow = inWindow;
+
+  const leaseYears = Math.max(1, Math.ceil((c.leaseMonths||0)/12));
+  const renoBench = (c.renoBench!==null && c.renoBench!==undefined) ? c.renoBench : standardRenoCost(c.size);
+  r.renoBenchAuto = (c.renoBench===null || c.renoBench===undefined);
+  const bench = projectContract(benchmarkRent, c.size, c.escalation, leaseYears, renoBench);
+  const act = projectContract(c.actualRent, c.size, c.escalation, leaseYears, c.renoActual||0);
+  const totalSavings = bench.total - act.total;
+  const savingsPct = bench.total>0 ? totalSavings/bench.total : 0;
+  r.finance = { bench, act, totalSavings, savingsPct, leaseYears };
+
+  const simpleSavingsPct = benchmarkRent>0 ? (benchmarkRent - c.actualRent)/benchmarkRent : null;
+  const threshold = utilizationThreshold(c.region);
+
+  const policies = [];
+  policies.push({id:1, label:'Direct Leasing', pass: c.directLease===true,
+    detail: c.directLease===true?'Direct lease confirmed':(c.directLease===false?'Hub is under sublease':'Not specified')});
+  policies.push({id:2, label:'Rent ≥15% Below Benchmark', pass: simpleSavingsPct!==null && simpleSavingsPct>=0.15,
+    detail: simpleSavingsPct!==null?`Actual rent is ${(simpleSavingsPct*100).toFixed(1)}% below benchmark`:'Benchmark unavailable'});
+  policies.push({id:3, label:'Utilization Threshold', pass: c.utilization!==null && threshold!==null && c.utilization>=threshold,
+    detail: threshold===null?'Unknown region — cannot verify threshold':(c.utilization!==null?`${c.utilization}% (needs ≥${threshold}%)`:'Not specified')});
+  policies.push({id:4, label:'Financial Savings ≥ ₱1,000,000', pass: totalSavings>=1000000,
+    detail: `Total contract savings: ₱${Math.round(totalSavings).toLocaleString()}`});
+  policies.push({id:5, label:'Lease Duration ≥24 Months', pass: (c.leaseMonths||0)>=24,
+    detail: (c.leaseStart && c.leaseEnd)
+      ? `${c.leaseMonths||0} months (${c.leaseStart.toLocaleDateString()} → ${c.leaseEnd.toLocaleDateString()})`
+      : `${c.leaseMonths||0} months`});
+  policies.push({id:6, label:'Location Scorecard ≥75%', pass: c.locationScore!==null && c.locationScore>=75,
+    detail: c.locationScore!==null?`${c.locationScore}%`:'Not specified'});
+
+  let p7pass=false, p7pending=false, p7detail='DD/COL not complete';
+  if (c.ddComplete && c.colSigned) { p7pass=true; p7detail='DD complete, COL signed'; }
+  else if (c.goLive) {
+    const deadline=new Date(c.goLive); deadline.setMonth(deadline.getMonth()+6);
+    if (today<=deadline) { p7pending=true; p7detail=`Pending — due by ${deadline.toLocaleDateString()}`; }
+    else { p7detail='Grace period expired (6 months from go-live)'; }
+  } else { p7detail = 'DD/COL not complete and no go-live date to compute grace period'; }
+  policies.push({id:7, label:'Compliance Docs (DD + COL)', pass:p7pass, pending:p7pending, detail:p7detail});
+
+  r.policies = policies;
+  const hardFails = policies.filter(p=>!p.pass && !p.pending);
+  r.eligible = inWindow!==false && hardFails.length===0;
+  r.pendingOnly = r.eligible && policies.some(p=>p.pending);
+
+  let tier=0, tierLabel='Not Qualified';
+  if (savingsPct>=0.501) { tier=45; tierLabel='50.1%+'; }
+  else if (savingsPct>=0.251) { tier=30; tierLabel='25.1%–50%'; }
+  else if (savingsPct>=0.15) { tier=15; tierLabel='15%–25%'; }
+  r.tier=tier; r.tierLabel=tierLabel;
+  r.payout = (r.eligible && tier>0) ? Math.min(tier*c.size, CAP) : 0;
+  return r;
+}
+
+function getEvalOptions() {
+  return {
+    poolMode: document.getElementById('opt-pool-mode').value,
+    radiusKm: parseFloat(document.getElementById('opt-radius-km').value) || 0,
+    exclOutliers: document.getElementById('opt-excl-outliers').checked,
+    sublessorOn: document.getElementById('opt-sublessor').checked,
+    sublessorPct: parseFloat(document.getElementById('opt-sublessor-pct').value) || 0
+  };
+}
+function onPoolModeChange() {
+  const mode = document.getElementById('opt-pool-mode').value;
+  document.getElementById('opt-radius-row').style.display = mode === 'radius' ? 'block' : 'none';
+}
+async function evaluateAll() {
+  const progStart = new Date(document.getElementById('prog-start').value+'T00:00:00');
+  const progEnd = new Date(document.getElementById('prog-end').value+'T23:59:59');
+  const today = new Date();
+  const opts = getEvalOptions();
+  const needsGeocode = opts.poolMode === 'city' || opts.poolMode === 'district';
+  const btn = document.getElementById('eval-btn');
+  btn.disabled = true;
+  const origLabel = btn.textContent;
+  const newResults = [];
+  for (let i=0;i<candidates.length;i++) {
+    if (needsGeocode) btn.textContent = `Evaluating… (${i+1}/${candidates.length})`;
+    newResults.push(await evaluateCandidate(candidates[i], progStart, progEnd, today, opts));
+    if (needsGeocode && i < candidates.length-1) await new Promise(res=>setTimeout(res, 1100));
+  }
+  results = newResults;
+  btn.textContent = origLabel;
+  btn.disabled = candidates.length===0;
+  expandedIdx = null;
+  renderResults();
+}
+
+/* ═══════ RENDERING ═══════ */
+function money(n) { return '₱'+Math.round(n).toLocaleString(); }
+function pct(n) { return (n*100).toFixed(1)+'%'; }
+
+function statusInfo(r) {
+  if (r.error) return {cls:'r-fail', badge:'b-fail', label:'⚠ Error'};
+  if (r.inWindow===false) return {cls:'r-window', badge:'b-window', label:'Outside Window'};
+  if (r.eligible && r.pendingOnly) return {cls:'r-pending', badge:'b-pending', label:'Eligible — Pending Docs'};
+  if (r.eligible) return {cls:'r-elig', badge:'b-elig', label:'Eligible'};
+  return {cls:'r-fail', badge:'b-fail', label:'Not Eligible'};
+}
+
+function renderResults() {
+  const content = document.getElementById('content');
+  if (!results.length) {
+    content.innerHTML = `<div class="empty-state"><div class="ei">🏠</div>No results yet. Upload candidate hub data and click <b>Evaluate Incentives</b>.</div>`;
+    return;
+  }
+  const eligibleCount = results.filter(r=>r.eligible && !r.error).length;
+  const totalPayout = results.reduce((s,r)=>s+(r.payout||0),0);
+  const totalSavings = results.reduce((s,r)=>s+(r.finance?r.finance.totalSavings:0),0);
+
+  let html = `<div class="content-sticky">
+    <div class="summary-row">
+      <div class="summary-card"><div class="sc-label">Candidate Hubs</div><div class="sc-value">${results.length}</div></div>
+      <div class="summary-card accent"><div class="sc-label">Qualified</div><div class="sc-value">${eligibleCount}</div></div>
+      <div class="summary-card"><div class="sc-label">Total Contract Savings</div><div class="sc-value">${money(totalSavings)}</div></div>
+      <div class="summary-card accent"><div class="sc-label">Total Incentive Pay-out</div><div class="sc-value">${money(totalPayout)}</div></div>
+    </div>
+    <div style="text-align:right;margin-top:10px">
+      <button class="btn btn-outline btn-sm" onclick="downloadResultsCSV()">⬇ Download Results CSV (with formulas)</button>
+    </div>
+  </div>
+  <div class="content-body">
+  <table class="results"><thead><tr>
+    <th></th><th>Hub</th><th>Region</th><th>Go-Live</th><th>Benchmark ₱/sqm</th><th>Actual ₱/sqm</th>
+    <th>Rent Savings</th><th>Contract Savings</th><th>Tier</th><th>Status</th><th>Pay-out</th>
+  </tr></thead><tbody>`;
+
+  results.forEach((r,i) => {
+    if (r.error) {
+      html += `<tr class="r-fail" onclick="toggleRow(${i})"><td>${expandedIdx===i?'▼':'▶'}</td><td>${esc(r.c.name)}</td><td colspan="9" style="color:#c0392b">${esc(r.error)}</td></tr>`;
+      return;
+    }
+    const st = statusInfo(r);
+    const simplePct = r.benchmarkRent>0 ? (r.benchmarkRent - r.c.actualRent)/r.benchmarkRent : null;
+    html += `<tr class="${st.cls}" onclick="toggleRow(${i})">
+      <td>${expandedIdx===i?'▼':'▶'}</td>
+      <td>${esc(r.c.name)}${r.c.pic?`<br><span style="color:#aaa;font-size:11px">PIC: ${esc(r.c.pic)}</span>`:''}</td>
+      <td>${r.c.region?`<span class="badge b-region">${esc(r.c.region)}</span>`:'—'}</td>
+      <td>${r.c.goLive?r.c.goLive.toLocaleDateString():'—'}</td>
+      <td>₱${r.benchmarkRent.toFixed(2)}${r.usedOverride?' <span style="color:#aaa;font-size:10px">(override)</span>':''}</td>
+      <td>₱${r.c.actualRent.toFixed(2)}</td>
+      <td>${simplePct!==null?pct(simplePct):'—'}</td>
+      <td>${pct(r.finance.savingsPct)}</td>
+      <td>${r.tier?('₱'+r.tier+'/sqm'):'—'}</td>
+      <td><span class="badge ${st.badge}">${st.label}</span></td>
+      <td style="font-weight:700">${r.payout?money(r.payout):'—'}</td>
+    </tr>`;
+    if (expandedIdx===i) html += renderDetailRow(r, i);
+  });
+
+  html += `</tbody></table></div>`;
+  content.innerHTML = html;
+  updateStickyTableHeaderOffset();
+  destroyDetailMap();
+  if (expandedIdx !== null && results[expandedIdx] && !results[expandedIdx].error) {
+    initDetailMap(results[expandedIdx]);
+    populateAddHubSelect(results[expandedIdx]);
+  }
+}
+
+function updateStickyTableHeaderOffset() {
+  const stickyBar = document.querySelector('.content-sticky');
+  const theadCells = document.querySelectorAll('table.results thead th');
+  if (!stickyBar || !theadCells.length) return;
+  const h = stickyBar.getBoundingClientRect().height;
+  theadCells.forEach(th => th.style.top = h + 'px');
+}
+window.addEventListener('resize', () => { if (results.length) updateStickyTableHeaderOffset(); });
+
+function renderDetailRow(r, rowIdx) {
+  const c = r.c;
+  const polIcon = p => p.pass ? '✅' : (p.pending ? '⏳' : '❌');
+  let policiesHtml = r.policies.map(p=>`
+    <div class="pol-row"><span class="pol-icon">${polIcon(p)}</span>
+      <div><span class="pol-label">${p.id}. ${p.label}</span><br><span class="pol-detail">${esc(p.detail)}</span></div>
+    </div>`).join('');
+  if (r.inWindow===false) {
+    policiesHtml = `<div class="pol-row"><span class="pol-icon">🚫</span><div><span class="pol-label">Outside Program Window</span><br><span class="pol-detail">Go-live ${c.goLive?c.goLive.toLocaleDateString():'—'} falls outside the program period — ineligible regardless of other policies.</span></div></div>` + policiesHtml;
+  } else if (r.inWindow===null) {
+    policiesHtml = `<div class="pol-row"><span class="pol-icon">❔</span><div><span class="pol-label">Go-Live Date Not Provided</span><br><span class="pol-detail">Cannot confirm this hub falls within the program window.</span></div></div>` + policiesHtml;
+  }
+
+  const finRows = (label, obj) => obj.years.map((y,idx)=>`<tr><td>Year ${idx+1}${idx>0?' (+'+c.escalation+'%)':''}</td><td>${money(y)}</td></tr>`).join('');
+  const finTable = (label, obj, renoNote) => `
+    <table class="fin">
+      <tr><th colspan="2" style="text-align:left;color:#888;font-weight:600">${label}</th></tr>
+      <tr><td>Renovation${renoNote?` <span style="color:#aaa;font-weight:400">${renoNote}</span>`:''}</td><td>${money(obj.renovation)}</td></tr>
+      ${finRows(label,obj)}
+      <tr class="total"><td>Total for lease contract</td><td>${money(obj.total)}</td></tr>
+    </table>`;
+
+  const canRemove = r.nearestUsed && r.nearestUsed.length > 1;
+  const nearestHtml = r.usedOverride
+    ? `<div class="nearest-list" style="color:#999">Benchmark rent was manually overridden — nearest-hub computation skipped.</div>`
+    : (r.nearestUsed && r.nearestUsed.length
+        ? `<div class="nearest-list">${r.nearestUsed.map((h,idx)=>`<div id="nl-row-${idx}" class="nl-row ${h.outlier?'out':''}" onmouseenter="highlightHubMarker(${idx})" onmouseleave="unhighlightHubMarker(${idx})">
+            <span class="nl-info"><span>${esc(h.name)}${h.outlier?' ⚠':''}${h._subAdjusted?' <span style="color:#8e44ad">(sub)</span>':''}</span><span>${h.dist!==undefined?h.dist.toFixed(1)+' km · ':''}₱${h.rent.toLocaleString()}/sqm</span></span>
+            ${canRemove?`<button class="nl-remove" title="Remove from pool" onclick="event.stopPropagation();removePoolHub(${rowIdx},${idx})">✕</button>`:''}
+          </div>`).join('')}</div>
+          <div class="pool-edit-row">
+            <select id="add-hub-select"></select>
+            <button class="btn btn-sm btn-outline" onclick="addHubToPool(${rowIdx})">+ Add</button>
+          </div>
+          ${r.poolLabel==='Manual selection'?`<div style="margin-top:6px"><button class="pool-reset-link" onclick="resetPoolToAuto(${rowIdx})">↺ Reset to auto-selected pool</button></div>`:''}`
+        : `<div class="nearest-list" style="color:#c0392b">No benchmark hub data available.</div>`);
+
+  const poolFallbackNote = r.poolFellBack
+    ? `<div class="map-note" style="color:#e67e22">No hubs found for the selected mode — fell back to nearest 12.</div>` : '';
+  const mapHtml = r.usedOverride
+    ? `<div class="map-note">Benchmark rent was manually overridden — no map to show.</div>`
+    : (r.nearestUsed && r.nearestUsed.length
+        ? `<div id="detail-map" class="detail-map"></div>`
+        : '');
+
+  return `<tr class="detail-row"><td colspan="11">
+    <div class="detail-grid">
+      <div class="detail-col">
+        <h4>Policy Checklist</h4>
+        ${policiesHtml}
+      </div>
+      <div class="detail-col">
+        <h4>Contract Cost Projection (${r.finance.leaseYears} yr${r.finance.leaseYears>1?'s':''}, size ${c.size} sqm)</h4>
+        ${finTable('Benchmark scenario', r.finance.bench, r.renoBenchAuto ? `(auto: ₱${standardRenoRate(c.size).toFixed(2)}/sqm rate card)` : '(manual override)')}
+        ${finTable('Actual scenario', r.finance.act)}
+        <div style="font-size:12.5px;color:#555">Total contract savings: <b>${money(r.finance.totalSavings)}</b> (${pct(r.finance.savingsPct)})</div>
+      </div>
+      <div class="detail-col wide">
+        <h4>Benchmark — ${esc(r.poolLabel||'Nearest 12 hubs')} (${r.nearestUsed?r.nearestUsed.length:0} used)</h4>
+        ${poolFallbackNote}
+        ${mapHtml}
+        ${nearestHtml}
+      </div>
+    </div>
+  </td></tr>`;
+}
+
+function toggleRow(i) { expandedIdx = expandedIdx===i ? null : i; renderResults(); }
+
+/* ═══════ MANUAL POOL EDITING ═══════ */
+function persistCandidates() { localStorage.setItem('inc_candidates', JSON.stringify(candidates)); }
+function snapshotPool(nearestUsed) {
+  return (nearestUsed||[]).map(h=>({
+    name: h.name, lat: h.lat, lng: h.lng,
+    rent: h._origRent!==undefined ? h._origRent : h.rent,
+    region: h.region||'', lessor: h.lessor||''
+  }));
+}
+async function reEvaluateOne(rowIdx) {
+  const progStart = new Date(document.getElementById('prog-start').value+'T00:00:00');
+  const progEnd = new Date(document.getElementById('prog-end').value+'T23:59:59');
+  const today = new Date();
+  const opts = (results[rowIdx] && results[rowIdx].optsUsed) || getEvalOptions();
+  results[rowIdx] = await evaluateCandidate(candidates[rowIdx], progStart, progEnd, today, opts);
+  renderResults();
+}
+function removePoolHub(rowIdx, hubIdx) {
+  const r = results[rowIdx];
+  if (!r || !r.nearestUsed || r.nearestUsed.length<=1) return;
+  const snap = snapshotPool(r.nearestUsed);
+  snap.splice(hubIdx, 1);
+  candidates[rowIdx]._manualPool = snap;
+  persistCandidates();
+  reEvaluateOne(rowIdx);
+}
+function addHubToPool(rowIdx) {
+  const sel = document.getElementById('add-hub-select');
+  if (!sel || !sel.value) return;
+  const [name, lat, lng] = sel.value.split('|||');
+  const hub = benchHubs.find(h=>h.name===name && String(h.lat)===lat && String(h.lng)===lng);
+  if (!hub) return;
+  const r = results[rowIdx];
+  const snap = snapshotPool(r.nearestUsed);
+  snap.push({ name: hub.name, lat: hub.lat, lng: hub.lng, rent: hub.rent, region: hub.region||'', lessor: hub.lessor||'' });
+  candidates[rowIdx]._manualPool = snap;
+  persistCandidates();
+  reEvaluateOne(rowIdx);
+}
+function resetPoolToAuto(rowIdx) {
+  delete candidates[rowIdx]._manualPool;
+  persistCandidates();
+  reEvaluateOne(rowIdx);
+}
+function populateAddHubSelect(r) {
+  const sel = document.getElementById('add-hub-select');
+  if (!sel || r.usedOverride || !benchHubs.length) return;
+  const included = new Set((r.nearestUsed||[]).map(h=>h.name+'|'+h.lat+'|'+h.lng));
+  const candName = (r.c.name||'').toLowerCase().trim();
+  const candidates_ = benchHubs
+    .filter(h=>!included.has(h.name+'|'+h.lat+'|'+h.lng))
+    .map(h=>({...h, dist: hav(r.c.lat, r.c.lng, h.lat, h.lng)}))
+    .filter(h=>h.dist>=0.05 && (h.name||'').toLowerCase().trim()!==candName)
+    .sort((a,b)=>a.dist-b.dist);
+  sel.innerHTML = '<option value="">— Add a hub to the pool —</option>' +
+    candidates_.map(h=>`<option value="${esc(h.name)}|||${h.lat}|||${h.lng}">${esc(h.name)} — ${h.dist.toFixed(1)}km — ₱${h.rent.toLocaleString()}/sqm</option>`).join('');
+}
+
+/* ═══════ DETAIL MAP ═══════ */
+function destroyDetailMap() {
+  if (detailMap) { detailMap.remove(); detailMap = null; }
+  detailRouteLayers = [];
+  detailMarkers = [];
+}
+function baseMarkerStyle(h) { return { radius: 8, fillColor: h.outlier ? '#bbb' : '#2980b9', color: '#fff', weight: 1.5, fillOpacity: h.outlier ? 0.5 : 0.85 }; }
+function hoverMarkerStyle(h) { return { radius: 12, fillColor: h.outlier ? '#bbb' : '#2980b9', color: '#f39c12', weight: 3, fillOpacity: h.outlier ? 0.65 : 0.95 }; }
+function setListRowHighlight(idx, on) {
+  const row = document.getElementById('nl-row-'+idx);
+  if (row) row.classList.toggle('hl', on);
+}
+function highlightHubMarker(idx) {
+  const m = detailMarkers[idx]; if (!m) return;
+  m.setStyle(hoverMarkerStyle(m._hData)); m.bringToFront();
+}
+function unhighlightHubMarker(idx) {
+  const m = detailMarkers[idx]; if (!m) return;
+  m.setStyle(baseMarkerStyle(m._hData));
+}
+function initDetailMap(r) {
+  const container = document.getElementById('detail-map');
+  if (!container || !r.nearestUsed || !r.nearestUsed.length) return;
+  try {
+    detailMap = L.map(container, { scrollWheelZoom: true });
+    detailMap.createPane('labelsPane');
+    detailMap.getPane('labelsPane').style.zIndex = 350;
+    detailMap.getPane('labelsPane').style.pointerEvents = 'none';
+    L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+      attribution: 'Tiles &copy; Esri', maxZoom: 19, maxNativeZoom: 16
+    }).addTo(detailMap);
+    L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19, maxNativeZoom: 16, pane: 'labelsPane'
+    }).addTo(detailMap);
+
+    const c = r.c;
+    const bounds = [[c.lat, c.lng]];
+    L.marker([c.lat, c.lng], {
+      icon: L.divIcon({ className: '', html: `<div style="width:16px;height:16px;border-radius:50%;background:#f39c12;border:3px solid #fff;box-shadow:0 0 0 2px #f39c12"></div>`, iconSize:[16,16], iconAnchor:[8,8] })
+    }).addTo(detailMap).bindPopup(`<b>${esc(c.name)}</b><br>Candidate hub`);
+
+    r.nearestUsed.forEach((h,idx)=>{
+      bounds.push([h.lat, h.lng]);
+      const marker = L.circleMarker([h.lat, h.lng], baseMarkerStyle(h)).addTo(detailMap).bindPopup(
+        `<b>${esc(h.name)}</b><br>₱${h.rent.toLocaleString()}/sqm${h.dist!==undefined?'<br>'+h.dist.toFixed(1)+' km straight-line':''}${h.outlier?'<br><span style="color:#e67e22">Excluded as outlier</span>':''}${h._subAdjusted?'<br><span style="color:#8e44ad">Sublessor-adjusted</span>':''}`
+      );
+      marker._hData = h;
+      marker.on('mouseover', () => { marker.setStyle(hoverMarkerStyle(h)); marker.bringToFront(); setListRowHighlight(idx, true); });
+      marker.on('mouseout', () => { marker.setStyle(baseMarkerStyle(h)); setListRowHighlight(idx, false); });
+      detailMarkers[idx] = marker;
+    });
+    detailMap.fitBounds(bounds, { padding: [28,28] });
+
+    if (document.getElementById('opt-routes').checked) drawDetailRoutes(c, r.nearestUsed);
+  } catch(e) { console.warn('Map init failed:', e); }
+}
+async function drawDetailRoutes(c, hubs) {
+  const myMap = detailMap;
+  const targets = hubs.filter(h=>!h.outlier);
+  if (!targets.length || !myMap) return;
+  const maxDist = Math.max(...targets.map(h=>h.dist||0), 1);
+  const results = await Promise.all(targets.map(async h=>{
+    try {
+      const url = `https://router.project-osrm.org/route/v1/driving/${c.lng},${c.lat};${h.lng},${h.lat}?overview=full&geometries=geojson`;
+      const resp = await fetch(url, { signal: AbortSignal.timeout(6000) });
+      const j = await resp.json();
+      if (j.code !== 'Ok' || !j.routes[0]) return null;
+      return { geojson: j.routes[0].geometry, ratio: (h.dist||0)/maxDist };
+    } catch { return null; }
+  }));
+  if (detailMap !== myMap) return;
+  results.forEach(res=>{
+    if (!res) return;
+    const color = res.ratio < 0.33 ? '#27ae60' : res.ratio < 0.66 ? '#e67e22' : '#c0392b';
+    const layer = L.geoJSON(res.geojson, { style:{ color, weight:3, opacity:0.65 } }).addTo(myMap);
+    detailRouteLayers.push(layer);
+  });
+}
+
+/* ═══════ CSV FORMULA TEXT (audit trail) ═══════ */
+function benchHubListText(r) {
+  if (r.usedOverride || !r.nearestUsed) return '';
+  return r.nearestUsed.map(h=>{
+    let s = `${h.name} (${h.dist!==undefined?h.dist.toFixed(1)+'km, ':''}₱${h.rent.toFixed(2)}/sqm)`;
+    if (h.outlier) s += ' [OUTLIER-EXCLUDED]';
+    if (h._subAdjusted) s += ` [SUBLESSOR ADJ: was ₱${h._origRent.toFixed(2)}]`;
+    return s;
+  }).join('; ');
+}
+function benchmarkFormulaText(r) {
+  if (r.usedOverride) return `Manual override entered: ₱${r.benchmarkRent.toFixed(2)}/sqm`;
+  if (!r.nearestUsed || !r.nearestUsed.length) return 'No benchmark data';
+  const used = r.nearestUsed.filter(h=>!h.outlier);
+  const excluded = r.nearestUsed.filter(h=>h.outlier);
+  let txt = `Average of ${used.length} of ${r.nearestUsed.length} hubs (${r.poolLabel||'nearest 12'})`;
+  if (excluded.length) txt += `, ${excluded.length} outlier(s) excluded`;
+  txt += `: (${used.map(h=>'₱'+h.rent.toFixed(2)).join(' + ')}) / ${used.length} = ₱${r.benchmarkRent.toFixed(2)}`;
+  return txt;
+}
+function rentSavingsFormulaText(r) {
+  if (!(r.benchmarkRent>0)) return 'Benchmark unavailable';
+  const pctVal = (r.benchmarkRent - r.c.actualRent)/r.benchmarkRent;
+  return `(₱${r.benchmarkRent.toFixed(2)} − ₱${r.c.actualRent.toFixed(2)}) / ₱${r.benchmarkRent.toFixed(2)} = ${pct(pctVal)}`;
+}
+function yearByYearText(obj) {
+  return obj.years.map((y,idx)=>`Y${idx+1}: ${money(y)}`).join('; ');
+}
+function contractSavingsFormulaText(r) {
+  const f = r.finance;
+  return `₱${money(f.bench.total)} (benchmark total) − ₱${money(f.act.total)} (actual total) = ₱${money(f.totalSavings)} (${pct(f.savingsPct)} of benchmark total)`;
+}
+function tierFormulaText(r) {
+  const p = (r.finance.savingsPct*100).toFixed(1)+'%';
+  if (r.inWindow===false) return 'Outside program window — ineligible regardless of savings';
+  if (!r.eligible) return `Contract savings ${p} → tier band "${r.tierLabel}", but hub failed other required policies → ₱0/sqm`;
+  if (r.tier===0) return `Contract savings ${p} is below the 15% minimum → Not Qualified, ₱0/sqm`;
+  return `Contract savings ${p} falls in the "${r.tierLabel}" band → ₱${r.tier}/sqm`;
+}
+function payoutFormulaText(r) {
+  if (!r.eligible || !r.tier) return '₱0 (not eligible, or contract savings below 15% tier threshold)';
+  const raw = r.tier * r.c.size;
+  const capped = Math.min(raw, CAP);
+  return `min(₱${r.tier}/sqm × ${r.c.size}sqm, ₱50,000 cap) = min(₱${money(raw)}, ₱50,000) = ₱${money(capped)}`;
+}
+function failedPoliciesText(r) {
+  if (r.inWindow===false) return 'Outside program window';
+  const fails = r.policies.filter(p=>!p.pass && !p.pending).map(p=>`${p.id}. ${p.label}`);
+  const pend = r.policies.filter(p=>p.pending).map(p=>`${p.id}. ${p.label} (pending)`);
+  return [...fails, ...pend].join('; ') || 'All policies passed';
+}
+
+function downloadResultsCSV() {
+  const headers = [
+    'Hub','PIC','Region','Go-Live','Status',
+    'Pool Mode','Benchmark Hubs Used (detail)',
+    'Benchmark Rent/sqm','Benchmark Formula',
+    'Actual Rent/sqm','Rent Savings %','Rent Savings Formula',
+    'Size (sqm)','Lease Start','Lease End','Lease Duration (months)','Lease Duration Formula','Escalation %/yr',
+    'Benchmark Renovation Cost','Benchmark Renovation Basis','Benchmark Year-by-Year','Benchmark Total Contract Cost',
+    'Actual Renovation Cost','Actual Year-by-Year','Actual Total Contract Cost',
+    'Total Contract Savings (Php)','Total Contract Savings Formula','Contract Savings %',
+    'Tier (Php/sqm)','Tier Formula',
+    'Failed/Pending Policies',
+    'Pay-out (Php)','Pay-out Formula'
+  ];
+  const rows=[headers];
+  results.forEach(r=>{
+    if (r.error) { rows.push([r.c.name,'','','','Error: '+r.error]); return; }
+    const st=statusInfo(r);
+    const simplePct = r.benchmarkRent>0 ? (r.benchmarkRent-r.c.actualRent)/r.benchmarkRent : '';
+    rows.push([
+      r.c.name, r.c.pic||'', r.c.region||'', r.c.goLive?r.c.goLive.toISOString().slice(0,10):'',
+      st.label,
+      r.usedOverride ? 'Manual override' : (r.poolLabel||''),
+      benchHubListText(r),
+      r.benchmarkRent.toFixed(2), benchmarkFormulaText(r),
+      r.c.actualRent.toFixed(2),
+      simplePct!==''?(simplePct*100).toFixed(1)+'%':'', rentSavingsFormulaText(r),
+      r.c.size,
+      r.c.leaseStart?r.c.leaseStart.toISOString().slice(0,10):'',
+      r.c.leaseEnd?r.c.leaseEnd.toISOString().slice(0,10):'',
+      r.c.leaseMonths||'',
+      (r.c.leaseStart && r.c.leaseEnd)
+        ? `DATEDIF(${r.c.leaseStart.toISOString().slice(0,10)}, ${r.c.leaseEnd.toISOString().slice(0,10)}+1, "M") = ${r.c.leaseMonths} months`
+        : 'Entered directly (no start/end dates supplied)',
+      r.c.escalation,
+      Math.round(r.finance.bench.renovation),
+      r.renoBenchAuto ? `Auto: ₱${standardRenoRate(r.c.size).toFixed(2)}/sqm rate card × ${r.c.size}sqm` : 'Manual override (CSV)',
+      yearByYearText(r.finance.bench), Math.round(r.finance.bench.total),
+      Math.round(r.finance.act.renovation), yearByYearText(r.finance.act), Math.round(r.finance.act.total),
+      Math.round(r.finance.totalSavings), contractSavingsFormulaText(r), (r.finance.savingsPct*100).toFixed(1)+'%',
+      r.tier, tierFormulaText(r),
+      failedPoliciesText(r),
+      r.payout, payoutFormulaText(r)
+    ]);
+  });
+  const csv = rows.map(row=>row.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);
+  a.download='rent-incentive-results-detailed.csv';
+  a.click();
+}
+
+/* ═══════ BOOT ═══════ */
+updateStatus();
+if (benchHubs.length) document.getElementById('bh-file-list').innerHTML = `<div class="file-item"><span>📄 Saved data</span><span class="fcount">${benchHubs.length.toLocaleString()} hubs</span></div>`;
+if (candidates.length) {
+  candidates = candidates.map(c => ({...c,
+    goLive: c.goLive ? new Date(c.goLive) : null,
+    leaseStart: c.leaseStart ? new Date(c.leaseStart) : null,
+    leaseEnd: c.leaseEnd ? new Date(c.leaseEnd) : null
+  }));
+  document.getElementById('cd-file-list').innerHTML = `<div class="file-item"><span>📄 Saved data</span><span class="fcount">${candidates.length.toLocaleString()} hubs</span></div>`;
+}
+initBenchGSheetLink();
+if (localStorage.getItem('inc_sidebarCollapsed')==='1') {
+  document.getElementById('sidebar').classList.add('collapsed');
+}
+if (isRenoAdmin()) document.getElementById('reno-admin-btn').textContent = '🔓 Admin';
+renderRenoRateTable();
+</script>
+</body>
+</html>
