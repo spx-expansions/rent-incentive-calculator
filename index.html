@@ -86,6 +86,7 @@ table.results tr:hover td { background: #fdf4f3; cursor: pointer; }
 .b-region { background: #2980b9; }
 .b-darkstore { background: #2c3e50; margin-left: 5px; }
 .dark-store-icon { filter: brightness(0); margin-left: 6px; font-size: 12px; vertical-align: middle; }
+.dark-store-icon.eligible { opacity: 0.25; }
 
 .detail-row td { background: #fbfbfc; padding: 16px 20px; }
 .detail-grid { display: flex; gap: 24px; flex-wrap: wrap; }
@@ -988,6 +989,7 @@ async function evaluateCandidate(c, progStart, progEnd, today, opts) {
 
   const { size: effSize, buffered: darkStoreBufferApplied } = effectiveSize(c, opts);
   r.effSize = effSize; r.darkStoreBufferApplied = darkStoreBufferApplied;
+  r.darkStoreEligibleRegion = isDarkStoreRegion(c);
 
   const leaseYears = Math.max(1, Math.ceil((c.leaseMonths||0)/12));
   const renoBench = (c.renoBench!==null && c.renoBench!==undefined) ? c.renoBench : standardRenoCost(effSize);
@@ -1124,7 +1126,7 @@ function renderResults() {
     const simplePct = r.benchmarkRent>0 ? (r.benchmarkRent - r.c.actualRent)/r.benchmarkRent : null;
     html += `<tr class="${st.cls}" onclick="toggleRow(${i})">
       <td>${expandedIdx===i?'▼':'▶'}</td>
-      <td>${esc(r.c.name)}${r.darkStoreBufferApplied?'<span class="dark-store-icon" title="Dark Store — +100 sqm buffer applied">🌙</span>':''}${r.c.pic?`<br><span style="color:#aaa;font-size:11px">PIC: ${esc(r.c.pic)}</span>`:''}</td>
+      <td>${esc(r.c.name)}${r.darkStoreBufferApplied?'<span class="dark-store-icon applied" title="Dark Store — +100 sqm buffer applied">🌙</span>':(r.darkStoreEligibleRegion?'<span class="dark-store-icon eligible" title="Dark Store-eligible region/city — buffer not currently applied">🌙</span>':'')}${r.c.pic?`<br><span style="color:#aaa;font-size:11px">PIC: ${esc(r.c.pic)}</span>`:''}</td>
       <td>${r.c.region?`<span class="badge b-region">${esc(r.c.region)}</span>`:'—'}</td>
       <td>${esc(r.c.city)||'—'}</td>
       <td>${r.c.goLive?r.c.goLive.toLocaleDateString():'—'}</td>
