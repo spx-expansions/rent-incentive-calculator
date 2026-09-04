@@ -84,6 +84,7 @@ table.results tr:hover td { background: #fdf4f3; cursor: pointer; }
 .b-fail { background: #95a5a6; }
 .b-window { background: #7f8c8d; }
 .b-region { background: #2980b9; }
+.b-darkstore { background: #2c3e50; margin-left: 5px; }
 
 .detail-row td { background: #fbfbfc; padding: 16px 20px; }
 .detail-grid { display: flex; gap: 24px; flex-wrap: wrap; }
@@ -191,7 +192,7 @@ table.fin tr.total td { font-weight: 700; border-top: 2px solid #ddd; }
         <button class="btn btn-outline btn-sm" onclick="downloadTemplate()">⬇ Download Template</button>
         <button class="btn btn-grey btn-sm" onclick="loadSampleData()">▶ Load Sample</button>
       </div>
-      <div class="hint">Required columns: <b>Hub Name, Latitude, Longitude, Actual Rent (Php/sqm), Size (sqm)</b>. Optional: Region, <b>Lease Start Date, Lease End Date</b> (lease duration is computed from these the same way the source sheet does &mdash; complete months between them, end date inclusive; a raw Lease Duration (months) column is used only if dates aren't given), Direct Lease (Yes/No), Utilization (%), Location Score (%), Go-Live Date, DD Complete (Yes/No), COL Signed (Yes/No), Escalation % (yearly), Actual Renovation Cost, <b>Benchmark Rent Override (Php/sqm)</b> &mdash; supply this to skip auto-computation. Benchmark Renovation Cost is auto-computed from a standard rate table by size (&#8369;1,867.45/sqm &le;400sqm, &#8369;950.91/sqm 401&ndash;800sqm, &#8369;572.02/sqm 801sqm+) &mdash; the CSV column overrides this if provided.</div>
+      <div class="hint">Required columns: <b>Hub Name, Latitude, Longitude, Actual Rent (Php/sqm), Size (sqm)</b>. Optional: Region, <b>City</b> (needed to check the Dark Store size rule for VIS/MIN hubs), <b>For Dark Store (Yes/No)</b> (Dark Store hubs in MM/GMA or a big VIS/MIN city &mdash; Cebu, Mandaue, Lapu-Lapu, Bacolod, Iloilo, Tacloban, Davao, Zamboanga, Cagayan de Oro, General Santos, Butuan, Iligan &mdash; need &ge;100 sqm; everyone else has no minimum), <b>Lease Start Date, Lease End Date</b> (lease duration is computed from these the same way the source sheet does &mdash; complete months between them, end date inclusive; a raw Lease Duration (months) column is used only if dates aren't given), Direct Lease (Yes/No), Utilization (%), Location Score (%), Go-Live Date, DD Complete (Yes/No), COL Signed (Yes/No), Escalation % (yearly), Actual Renovation Cost, <b>Benchmark Rent Override (Php/sqm)</b> &mdash; supply this to skip auto-computation. Benchmark Renovation Cost is auto-computed from a standard rate table by size (&#8369;1,867.45/sqm &le;400sqm, &#8369;950.91/sqm 401&ndash;800sqm, &#8369;572.02/sqm 801sqm+) &mdash; the CSV column overrides this if provided.</div>
       <div class="err" id="cd-err"></div>
     </div>
 
@@ -248,14 +249,15 @@ table.fin tr.total td { font-weight: 700; border-top: 2px solid #ddd; }
 
     <div class="sec">
       <div class="sec-title">Policy Reference</div>
-      <div class="policy-card"><b>All 7 must pass</b> to qualify (plus go-live inside the program window):<br>
+      <div class="policy-card"><b>All 8 must pass</b> to qualify (plus go-live inside the program window):<br>
       1. Direct leasing (no sublease)<br>
       2. Rent &ge;15% below benchmark<br>
       3. Utilization &ge; MM/NCR 65%, GMA/SOL/NOL 60%, VIS/MIN 40%<br>
       4. Total contract savings &ge; &#8369;1,000,000<br>
       5. Lease duration &ge; 24 months<br>
       6. Location scorecard &ge; 75%<br>
-      7. DD complete + COL signed (6-month grace from go-live)
+      7. DD complete + COL signed (6-month grace from go-live)<br>
+      8. Size &ge; 100 sqm if marked <b>Dark Store</b> in MM/GMA or a big VIS/MIN city (Cebu, Davao, etc.) &mdash; no minimum otherwise
       </div>
       <table class="tier-table">
         <tr><td colspan="2" style="font-weight:700;color:#333">Reward tier (total contract savings %)</td></tr>
@@ -391,6 +393,8 @@ function detectCandCols(headers) {
   const cols = {
     nameIdx: find('hub name','name','hub','station'),
     regionIdx: find('region'),
+    cityIdx: find('city','municipality'),
+    darkStoreIdx: find('for dark store','dark store'),
     latIdx: find('lat'),
     lngIdx: find('lon','lng','long'),
     rentIdx: find('actual rent','actual rate','rent','rate','price'),
@@ -433,6 +437,8 @@ function parseCandCSV(raw) {
     rows.push({
       name: c.nameIdx>=0?(p[c.nameIdx]||`Candidate ${i}`):`Candidate ${i}`,
       region: c.regionIdx>=0?(p[c.regionIdx]||'').toUpperCase().trim():'',
+      city: c.cityIdx>=0?(p[c.cityIdx]||'').trim():'',
+      isDarkStore: c.darkStoreIdx>=0?(parseYesNo(p[c.darkStoreIdx])===true):false,
       lat, lng, actualRent, size,
       leaseStart, leaseEnd,
       leaseMonths: leaseMonthsFromDatesVal!==null ? leaseMonthsFromDatesVal : (c.leaseMonthsIdx>=0?parseNum(p[c.leaseMonthsIdx]):null),
@@ -605,10 +611,10 @@ function toggleSidebar() {
 }
 
 /* ═══════ SAMPLE / TEMPLATE ═══════ */
-const SAMPLE_CSV_HEADERS = ['Hub Name','Region','Latitude','Longitude','Actual Rent (Php/sqm)','Size (sqm)','Lease Start Date','Lease End Date','Lease Duration (months)','Direct Lease (Yes/No)','Utilization (%)','Location Score (%)','Go-Live Date','DD Complete (Yes/No)','COL Signed (Yes/No)','Escalation % (yearly)','Actual Renovation Cost','Benchmark Renovation Cost','Benchmark Rent Override (Php/sqm)','PIC Name'];
+const SAMPLE_CSV_HEADERS = ['Hub Name','Region','City','Latitude','Longitude','Actual Rent (Php/sqm)','Size (sqm)','For Dark Store (Yes/No)','Lease Start Date','Lease End Date','Lease Duration (months)','Direct Lease (Yes/No)','Utilization (%)','Location Score (%)','Go-Live Date','DD Complete (Yes/No)','COL Signed (Yes/No)','Escalation % (yearly)','Actual Renovation Cost','Benchmark Renovation Cost','Benchmark Rent Override (Php/sqm)','PIC Name'];
 const SAMPLE_CSV_ROWS = [
-  ['Gensan Lagao Hub','MIN','6.1164','125.1716','101.82','1100','2026-07-15','2028-07-14','','Yes','45','80','2026-07-15','Yes','Yes','5','846776','','189','Juan Dela Cruz'],
-  ['San Roque Hub','GMA','14.35','121.05','138','759','2026-08-01','2029-07-31','','Yes','62','78','2026-08-01','Yes','Yes','5','629834','','181','Maria Santos']
+  ['Gensan Lagao Hub','MIN','General Santos','6.1164','125.1716','101.82','1100','Yes','2026-07-15','2028-07-14','','Yes','45','80','2026-07-15','Yes','Yes','5','846776','','189','Juan Dela Cruz'],
+  ['San Roque Hub','GMA','','14.35','121.05','138','759','No','2026-08-01','2029-07-31','','Yes','62','78','2026-08-01','Yes','Yes','5','629834','','181','Maria Santos']
 ];
 function buildSampleCSV() {
   const rows=[SAMPLE_CSV_HEADERS, ...SAMPLE_CSV_ROWS];
@@ -759,6 +765,31 @@ function utilizationThreshold(region) {
   if (['VIS','MIN'].includes(r)) return 40;
   return null;
 }
+/* "Big city" VIS/MIN list — Philippine Highly Urbanized Cities (HUC), an official
+   classification based on population (≥200,000) and income thresholds. Used to decide
+   which VIS/MIN hubs qualify for the Dark Store size buffer, same as all of MM/GMA. */
+const BIG_VISMIN_CITIES = [
+  'cebu','mandaue','lapu-lapu','bacolod','iloilo','tacloban',
+  'davao','zamboanga','cagayan de oro','cdo','general santos','gensan','butuan','iligan'
+];
+function isBigVismCity(city) {
+  const c = (city||'').toLowerCase().trim();
+  if (!c) return false;
+  return BIG_VISMIN_CITIES.some(name => c.includes(name));
+}
+function qualifiesForDarkStoreBuffer(c) {
+  const region = (c.region||'').toUpperCase().trim();
+  if (['MM','NCR','GMA'].includes(region)) return true;
+  if (['VIS','MIN'].includes(region)) return isBigVismCity(c.city);
+  return false;
+}
+const MIN_SIZE_BASE = 0;
+const DARK_STORE_BUFFER = 100;
+function minSizeRequirement(c) {
+  const buffer = (c.isDarkStore && qualifiesForDarkStoreBuffer(c)) ? DARK_STORE_BUFFER : 0;
+  return MIN_SIZE_BASE + buffer;
+}
+
 function projectContract(rentPerSqm, size, escalationPct, years, renovation) {
   // Matches the source workbook: escalation compounds at full precision — only
   // final totals get rounded (at display time via money()), never intermediate years.
@@ -894,6 +925,13 @@ async function evaluateCandidate(c, progStart, progEnd, today, opts) {
   } else { p7detail = 'DD/COL not complete and no go-live date to compute grace period'; }
   policies.push({id:7, label:'Compliance Docs (DD + COL)', pass:p7pass, pending:p7pending, detail:p7detail});
 
+  const minSize = minSizeRequirement(c);
+  const buffered = minSize > 0;
+  policies.push({id:8, label:'Minimum Size Requirement', pass: c.size>=minSize,
+    detail: buffered
+      ? `${c.size} sqm — needs ≥${minSize} sqm (Dark Store buffer applies: ${c.region||'—'}${c.city?' / '+c.city:''})`
+      : `${c.size} sqm — no minimum required${c.isDarkStore?' (Dark Store, but not in MM/GMA or a qualifying big VISMIN city)':''}`});
+
   r.policies = policies;
   const hardFails = policies.filter(p=>!p.pass && !p.pending);
   r.eligible = inWindow!==false && hardFails.length===0;
@@ -991,7 +1029,7 @@ function renderResults() {
     const simplePct = r.benchmarkRent>0 ? (r.benchmarkRent - r.c.actualRent)/r.benchmarkRent : null;
     html += `<tr class="${st.cls}" onclick="toggleRow(${i})">
       <td>${expandedIdx===i?'▼':'▶'}</td>
-      <td>${esc(r.c.name)}${r.c.pic?`<br><span style="color:#aaa;font-size:11px">PIC: ${esc(r.c.pic)}</span>`:''}</td>
+      <td>${esc(r.c.name)}${r.c.isDarkStore?'<span class="badge b-darkstore" title="Marked as Dark Store">🌙 DS</span>':''}${r.c.pic?`<br><span style="color:#aaa;font-size:11px">PIC: ${esc(r.c.pic)}</span>`:''}</td>
       <td>${r.c.region?`<span class="badge b-region">${esc(r.c.region)}</span>`:'—'}</td>
       <td>${r.c.goLive?r.c.goLive.toLocaleDateString():'—'}</td>
       <td>₱${r.benchmarkRent.toFixed(2)}${r.usedOverride?' <span style="color:#aaa;font-size:10px">(override)</span>':''}</td>
@@ -1284,7 +1322,7 @@ function failedPoliciesText(r) {
 
 function downloadResultsCSV() {
   const headers = [
-    'Hub','PIC','Region','Go-Live','Status',
+    'Hub','PIC','Region','City','Dark Store','Min Size Required (sqm)','Go-Live','Status',
     'Pool Mode','Benchmark Hubs Used (detail)',
     'Benchmark Rent/sqm','Benchmark Formula',
     'Actual Rent/sqm','Rent Savings %','Rent Savings Formula',
@@ -1302,7 +1340,8 @@ function downloadResultsCSV() {
     const st=statusInfo(r);
     const simplePct = r.benchmarkRent>0 ? (r.benchmarkRent-r.c.actualRent)/r.benchmarkRent : '';
     rows.push([
-      r.c.name, r.c.pic||'', r.c.region||'', r.c.goLive?r.c.goLive.toISOString().slice(0,10):'',
+      r.c.name, r.c.pic||'', r.c.region||'', r.c.city||'', r.c.isDarkStore?'Yes':'No', minSizeRequirement(r.c),
+      r.c.goLive?r.c.goLive.toISOString().slice(0,10):'',
       st.label,
       r.usedOverride ? 'Manual override' : (r.poolLabel||''),
       benchHubListText(r),
