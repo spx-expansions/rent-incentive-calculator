@@ -85,7 +85,7 @@ table.results tr:hover td { background: #fdf4f3; cursor: pointer; }
 .b-window { background: #7f8c8d; }
 .b-region { background: #2980b9; }
 .b-darkstore { background: #2c3e50; margin-left: 5px; }
-.dark-store-icon { display: inline-block; width: 14px; height: 9px; background: #000; margin-left: 6px; vertical-align: middle; border-radius: 1px; }
+.dark-store-icon { filter: brightness(0); margin-left: 6px; font-size: 12px; vertical-align: middle; }
 
 .detail-row td { background: #fbfbfc; padding: 16px 20px; }
 .detail-grid { display: flex; gap: 24px; flex-wrap: wrap; }
@@ -193,6 +193,22 @@ table.fin tr.total td { font-weight: 700; border-top: 2px solid #ddd; }
         <button class="btn btn-outline btn-sm" onclick="downloadTemplate()">⬇ Download Template</button>
         <button class="btn btn-grey btn-sm" onclick="loadSampleData()">▶ Load Sample</button>
       </div>
+      <div class="hint" style="margin-top:10px;margin-bottom:0;text-align:center">— or link a Google Sheet (auto-updates) —</div>
+      <div id="cd-gsheet-linked-banner" style="display:none;background:#f0f8ff;border:1px solid #bdd7ee;border-radius:6px;padding:7px 10px;margin-top:7px;font-size:12px;color:#1a5276">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span>🔗 Linked &middot; synced <span id="cd-gsheet-synced-at">—</span></span>
+          <span>
+            <button onclick="refreshCandGSheet()" style="background:none;border:none;color:#2980b9;font-size:11px;cursor:pointer;font-weight:600">↻ Refresh</button>
+            <button onclick="unlinkCandGSheet()" style="background:none;border:none;color:#c0392b;font-size:11px;cursor:pointer;font-weight:600;margin-left:8px">✕ Unlink</button>
+          </span>
+        </div>
+        <div id="cd-gsheet-sync-err" style="color:#c0392b;margin-top:4px"></div>
+      </div>
+      <div id="cd-gsheet-input-row" style="display:flex;gap:7px;margin-top:7px">
+        <input type="text" id="cd-gsheet-url" placeholder="Paste Google Sheets link…" style="flex:1;min-width:0;border:1px solid #d0d5dd;border-radius:6px;padding:7px 9px;font-size:13px">
+        <button class="btn btn-sm" onclick="loadCandGSheet()" style="flex-shrink:0">Link</button>
+      </div>
+      <div class="hint">Once linked, this list refreshes automatically every time the page opens — no more manual re-upload when the candidate list changes. Sheet must be set to <b>Anyone with the link can view</b>.</div>
       <div class="hint">Required columns: <b>Hub Name, Latitude, Longitude, Actual Rent (Php/sqm), Size (sqm)</b>. Optional: Region, <b>City</b> (needed to detect Dark Store hubs in VIS/MIN &mdash; see the Dark Store toggle in Benchmark Options), <b>Lease Start Date, Lease End Date</b> (lease duration is computed from these the same way the source sheet does &mdash; complete months between them, end date inclusive; a raw Lease Duration (months) column is used only if dates aren't given), Direct Lease (Yes/No), Utilization (%), Location Score (%), Go-Live Date, DD Complete (Yes/No), COL Signed (Yes/No), Escalation % (yearly), Actual Renovation Cost, <b>Benchmark Rent Override (Php/sqm)</b> &mdash; supply this to skip auto-computation. Benchmark Renovation Cost is auto-computed from a standard rate table by size (&#8369;1,867.45/sqm &le;400sqm, &#8369;950.91/sqm 401&ndash;800sqm, &#8369;572.02/sqm 801sqm+) &mdash; the CSV column overrides this if provided.</div>
       <div class="err" id="cd-err"></div>
     </div>
@@ -582,6 +598,87 @@ function handleCandFiles(fileList) {
     localStorage.setItem('inc_candidates', JSON.stringify(candidates));
     updateStatus();
   }).catch(e=>setCandErr('Error reading files: '+e.message));
+}
+
+/* ═══════ CANDIDATE HUBS — LIVE GOOGLE SHEET LINK ═══════ */
+async function fetchFromCandGSheet(raw, opts) {
+  opts = opts || {};
+  const m = raw.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+  if (!m) {
+    if (opts.silent) setCandGSheetSyncErr('Saved link is not a valid Google Sheets URL.');
+    else setCandErr('Could not find a Sheet ID in that URL. Make sure it\'s a Google Sheets link.');
+    return false;
+  }
+  const sheetId = m[1];
+  const gidM = raw.match(/[#&?]gid=(\d+)/);
+  const gid = gidM ? gidM[1] : '0';
+  const exportUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
+  if (!opts.silent) {
+    setCandErr('');
+    document.getElementById('cd-file-list').innerHTML = '<div class="file-item"><span>⏳ Fetching sheet…</span></div>';
+  }
+  try {
+    const resp = await fetch(exportUrl);
+    if (!resp.ok) {
+      if (resp.status === 403) throw new Error('Sheet is not public. Set sharing to "Anyone with the link can view".');
+      throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+    }
+    const text = await resp.text();
+    const {rows} = parseCandCSV(text);
+    if (!rows.length) throw new Error('No valid candidate rows found in the sheet.');
+    candidates = rows;
+    localStorage.setItem('inc_candidates', JSON.stringify(candidates));
+    document.getElementById('cd-file-list').innerHTML =
+      `<div class="file-item"><span>📊 Google Sheet</span><span class="fcount">${rows.length.toLocaleString()} hubs</span></div>`;
+    localStorage.setItem('inc_candGSheetUrl', raw);
+    localStorage.setItem('inc_candGSheetSyncedAt', new Date().toLocaleString());
+    showCandGSheetLinked();
+    updateStatus();
+    return true;
+  } catch(e) {
+    if (opts.silent) setCandGSheetSyncErr('Could not refresh (' + e.message + ') — showing last synced data.');
+    else { document.getElementById('cd-file-list').innerHTML=''; setCandErr('Google Sheets error: ' + e.message); }
+    return false;
+  }
+}
+function loadCandGSheet() {
+  const raw = document.getElementById('cd-gsheet-url').value.trim();
+  if (!raw) { setCandErr('Paste a Google Sheets link first.'); return; }
+  fetchFromCandGSheet(raw, {silent:false});
+}
+function refreshCandGSheet() {
+  const url = localStorage.getItem('inc_candGSheetUrl');
+  if (!url) return;
+  setCandGSheetSyncErr('Refreshing…');
+  fetchFromCandGSheet(url, {silent:true});
+}
+function unlinkCandGSheet() {
+  localStorage.removeItem('inc_candGSheetUrl');
+  localStorage.removeItem('inc_candGSheetSyncedAt');
+  document.getElementById('cd-gsheet-url').value = '';
+  showCandGSheetLinked();
+}
+function setCandGSheetSyncErr(msg) {
+  const el = document.getElementById('cd-gsheet-sync-err');
+  if (el) el.textContent = msg || '';
+}
+function showCandGSheetLinked() {
+  const url = localStorage.getItem('inc_candGSheetUrl');
+  const at = localStorage.getItem('inc_candGSheetSyncedAt');
+  const banner = document.getElementById('cd-gsheet-linked-banner');
+  const inputRow = document.getElementById('cd-gsheet-input-row');
+  if (!url) { banner.style.display='none'; inputRow.style.display='flex'; return; }
+  banner.style.display='block';
+  inputRow.style.display='none';
+  document.getElementById('cd-gsheet-synced-at').textContent = at || 'just now';
+  setCandGSheetSyncErr('');
+}
+function initCandGSheetLink() {
+  const url = localStorage.getItem('inc_candGSheetUrl');
+  if (!url) return;
+  document.getElementById('cd-gsheet-url').value = url;
+  showCandGSheetLinked();
+  fetchFromCandGSheet(url, {silent:true});
 }
 
 function clearAll() {
@@ -1014,21 +1111,22 @@ function renderResults() {
   </div>
   <div class="content-body">
   <table class="results"><thead><tr>
-    <th></th><th>Hub</th><th>Region</th><th>Go-Live</th><th>Benchmark ₱/sqm</th><th>Actual ₱/sqm</th><th>Size (sqm)</th>
+    <th></th><th>Hub</th><th>Region</th><th>City</th><th>Go-Live</th><th>Benchmark ₱/sqm</th><th>Actual ₱/sqm</th><th>Size (sqm)</th>
     <th>Rent Savings</th><th>Contract Savings</th><th>Tier</th><th>Status</th><th>Pay-out</th>
   </tr></thead><tbody>`;
 
   results.forEach((r,i) => {
     if (r.error) {
-      html += `<tr class="r-fail" onclick="toggleRow(${i})"><td>${expandedIdx===i?'▼':'▶'}</td><td>${esc(r.c.name)}</td><td colspan="10" style="color:#c0392b">${esc(r.error)}</td></tr>`;
+      html += `<tr class="r-fail" onclick="toggleRow(${i})"><td>${expandedIdx===i?'▼':'▶'}</td><td>${esc(r.c.name)}</td><td colspan="11" style="color:#c0392b">${esc(r.error)}</td></tr>`;
       return;
     }
     const st = statusInfo(r);
     const simplePct = r.benchmarkRent>0 ? (r.benchmarkRent - r.c.actualRent)/r.benchmarkRent : null;
     html += `<tr class="${st.cls}" onclick="toggleRow(${i})">
       <td>${expandedIdx===i?'▼':'▶'}</td>
-      <td>${esc(r.c.name)}${r.darkStoreBufferApplied?'<span class="dark-store-icon" title="Dark Store — +100 sqm buffer applied"></span>':''}${r.c.pic?`<br><span style="color:#aaa;font-size:11px">PIC: ${esc(r.c.pic)}</span>`:''}</td>
+      <td>${esc(r.c.name)}${r.darkStoreBufferApplied?'<span class="dark-store-icon" title="Dark Store — +100 sqm buffer applied">🌙</span>':''}${r.c.pic?`<br><span style="color:#aaa;font-size:11px">PIC: ${esc(r.c.pic)}</span>`:''}</td>
       <td>${r.c.region?`<span class="badge b-region">${esc(r.c.region)}</span>`:'—'}</td>
+      <td>${esc(r.c.city)||'—'}</td>
       <td>${r.c.goLive?r.c.goLive.toLocaleDateString():'—'}</td>
       <td>₱${r.benchmarkRent.toFixed(2)}${r.usedOverride?' <span style="color:#aaa;font-size:10px">(override)</span>':''}</td>
       <td>₱${r.c.actualRent.toFixed(2)}</td>
@@ -1106,7 +1204,7 @@ function renderDetailRow(r, rowIdx) {
         ? `<div id="detail-map" class="detail-map"></div>`
         : '');
 
-  return `<tr class="detail-row"><td colspan="12">
+  return `<tr class="detail-row"><td colspan="13">
     <div class="detail-grid">
       <div class="detail-col">
         <h4>Policy Checklist</h4>
@@ -1385,6 +1483,7 @@ if (candidates.length) {
   document.getElementById('cd-file-list').innerHTML = `<div class="file-item"><span>📄 Saved data</span><span class="fcount">${candidates.length.toLocaleString()} hubs</span></div>`;
 }
 initBenchGSheetLink();
+initCandGSheetLink();
 if (localStorage.getItem('inc_sidebarCollapsed')==='1') {
   document.getElementById('sidebar').classList.add('collapsed');
 }
