@@ -192,7 +192,7 @@ table.fin tr.total td { font-weight: 700; border-top: 2px solid #ddd; }
         <button class="btn btn-outline btn-sm" onclick="downloadTemplate()">⬇ Download Template</button>
         <button class="btn btn-grey btn-sm" onclick="loadSampleData()">▶ Load Sample</button>
       </div>
-      <div class="hint">Required columns: <b>Hub Name, Latitude, Longitude, Actual Rent (Php/sqm), Size (sqm)</b>. Optional: Region, <b>City</b> (needed to check the Dark Store size rule for VIS/MIN hubs), <b>For Dark Store (Yes/No)</b> (Dark Store hubs in MM/GMA or a big VIS/MIN city &mdash; Cebu, Mandaue, Lapu-Lapu, Bacolod, Iloilo, Tacloban, Davao, Zamboanga, Cagayan de Oro, General Santos, Butuan, Iligan &mdash; need &ge;100 sqm; everyone else has no minimum), <b>Lease Start Date, Lease End Date</b> (lease duration is computed from these the same way the source sheet does &mdash; complete months between them, end date inclusive; a raw Lease Duration (months) column is used only if dates aren't given), Direct Lease (Yes/No), Utilization (%), Location Score (%), Go-Live Date, DD Complete (Yes/No), COL Signed (Yes/No), Escalation % (yearly), Actual Renovation Cost, <b>Benchmark Rent Override (Php/sqm)</b> &mdash; supply this to skip auto-computation. Benchmark Renovation Cost is auto-computed from a standard rate table by size (&#8369;1,867.45/sqm &le;400sqm, &#8369;950.91/sqm 401&ndash;800sqm, &#8369;572.02/sqm 801sqm+) &mdash; the CSV column overrides this if provided.</div>
+      <div class="hint">Required columns: <b>Hub Name, Latitude, Longitude, Actual Rent (Php/sqm), Size (sqm)</b>. Optional: Region, <b>City</b> (needed to detect Dark Store hubs in VIS/MIN &mdash; see the Dark Store toggle in Benchmark Options), <b>Lease Start Date, Lease End Date</b> (lease duration is computed from these the same way the source sheet does &mdash; complete months between them, end date inclusive; a raw Lease Duration (months) column is used only if dates aren't given), Direct Lease (Yes/No), Utilization (%), Location Score (%), Go-Live Date, DD Complete (Yes/No), COL Signed (Yes/No), Escalation % (yearly), Actual Renovation Cost, <b>Benchmark Rent Override (Php/sqm)</b> &mdash; supply this to skip auto-computation. Benchmark Renovation Cost is auto-computed from a standard rate table by size (&#8369;1,867.45/sqm &le;400sqm, &#8369;950.91/sqm 401&ndash;800sqm, &#8369;572.02/sqm 801sqm+) &mdash; the CSV column overrides this if provided.</div>
       <div class="err" id="cd-err"></div>
     </div>
 
@@ -219,11 +219,15 @@ table.fin tr.total td { font-weight: 700; border-top: 2px solid #ddd; }
         <input type="number" id="opt-sublessor-pct" value="10" min="0" max="100" step="0.1">
         <span>% for sublessor benchmark hubs</span>
       </div>
-      <div class="opt-line" style="margin-bottom:0">
+      <div class="opt-line">
         <input type="checkbox" id="opt-routes">
         <span>Show driving routes on hub map</span>
       </div>
-      <div class="hint" style="margin-top:8px">"Same city/district" and driving routes look up boundaries and routes online (Nominatim/OSRM) when you evaluate or open a hub's map — this can take a few seconds per hub.</div>
+      <div class="opt-line" style="margin-bottom:0">
+        <input type="checkbox" id="opt-dark-store-buffer">
+        <span>Add &plus;100 sqm Dark Store buffer (MM/GMA &amp; big VIS/MIN cities)</span>
+      </div>
+      <div class="hint" style="margin-top:8px">"Same city/district" and driving routes look up boundaries and routes online (Nominatim/OSRM) when you evaluate or open a hub's map — this can take a few seconds per hub. The Dark Store buffer adds 100 sqm to a hub's size (used in every calculation below) for any hub in MM, GMA, NCR, or a big VIS/MIN city — Cebu, Mandaue, Lapu-Lapu, Bacolod, Iloilo, Tacloban, Davao, Zamboanga, Cagayan de Oro, General Santos, Butuan, Iligan (needs a <b>City</b> column to check VIS/MIN hubs). No manual per-hub marking needed.</div>
     </div>
 
     <div class="sec">
@@ -249,15 +253,14 @@ table.fin tr.total td { font-weight: 700; border-top: 2px solid #ddd; }
 
     <div class="sec">
       <div class="sec-title">Policy Reference</div>
-      <div class="policy-card"><b>All 8 must pass</b> to qualify (plus go-live inside the program window):<br>
+      <div class="policy-card"><b>All 7 must pass</b> to qualify (plus go-live inside the program window):<br>
       1. Direct leasing (no sublease)<br>
       2. Rent &ge;15% below benchmark<br>
       3. Utilization &ge; MM/NCR 65%, GMA/SOL/NOL 60%, VIS/MIN 40%<br>
       4. Total contract savings &ge; &#8369;1,000,000<br>
       5. Lease duration &ge; 24 months<br>
       6. Location scorecard &ge; 75%<br>
-      7. DD complete + COL signed (6-month grace from go-live)<br>
-      8. Size &ge; 100 sqm if marked <b>Dark Store</b> in MM/GMA or a big VIS/MIN city (Cebu, Davao, etc.) &mdash; no minimum otherwise
+      7. DD complete + COL signed (6-month grace from go-live)
       </div>
       <table class="tier-table">
         <tr><td colspan="2" style="font-weight:700;color:#333">Reward tier (total contract savings %)</td></tr>
@@ -394,7 +397,6 @@ function detectCandCols(headers) {
     nameIdx: find('hub name','name','hub','station'),
     regionIdx: find('region'),
     cityIdx: find('city','municipality'),
-    darkStoreIdx: find('for dark store','dark store'),
     latIdx: find('lat'),
     lngIdx: find('lon','lng','long'),
     rentIdx: find('actual rent','actual rate','rent','rate','price'),
@@ -438,7 +440,6 @@ function parseCandCSV(raw) {
       name: c.nameIdx>=0?(p[c.nameIdx]||`Candidate ${i}`):`Candidate ${i}`,
       region: c.regionIdx>=0?(p[c.regionIdx]||'').toUpperCase().trim():'',
       city: c.cityIdx>=0?(p[c.cityIdx]||'').trim():'',
-      isDarkStore: c.darkStoreIdx>=0?(parseYesNo(p[c.darkStoreIdx])===true):false,
       lat, lng, actualRent, size,
       leaseStart, leaseEnd,
       leaseMonths: leaseMonthsFromDatesVal!==null ? leaseMonthsFromDatesVal : (c.leaseMonthsIdx>=0?parseNum(p[c.leaseMonthsIdx]):null),
@@ -611,10 +612,10 @@ function toggleSidebar() {
 }
 
 /* ═══════ SAMPLE / TEMPLATE ═══════ */
-const SAMPLE_CSV_HEADERS = ['Hub Name','Region','City','Latitude','Longitude','Actual Rent (Php/sqm)','Size (sqm)','For Dark Store (Yes/No)','Lease Start Date','Lease End Date','Lease Duration (months)','Direct Lease (Yes/No)','Utilization (%)','Location Score (%)','Go-Live Date','DD Complete (Yes/No)','COL Signed (Yes/No)','Escalation % (yearly)','Actual Renovation Cost','Benchmark Renovation Cost','Benchmark Rent Override (Php/sqm)','PIC Name'];
+const SAMPLE_CSV_HEADERS = ['Hub Name','Region','City','Latitude','Longitude','Actual Rent (Php/sqm)','Size (sqm)','Lease Start Date','Lease End Date','Lease Duration (months)','Direct Lease (Yes/No)','Utilization (%)','Location Score (%)','Go-Live Date','DD Complete (Yes/No)','COL Signed (Yes/No)','Escalation % (yearly)','Actual Renovation Cost','Benchmark Renovation Cost','Benchmark Rent Override (Php/sqm)','PIC Name'];
 const SAMPLE_CSV_ROWS = [
-  ['Gensan Lagao Hub','MIN','General Santos','6.1164','125.1716','101.82','1100','Yes','2026-07-15','2028-07-14','','Yes','45','80','2026-07-15','Yes','Yes','5','846776','','189','Juan Dela Cruz'],
-  ['San Roque Hub','GMA','','14.35','121.05','138','759','No','2026-08-01','2029-07-31','','Yes','62','78','2026-08-01','Yes','Yes','5','629834','','181','Maria Santos']
+  ['Gensan Lagao Hub','MIN','General Santos','6.1164','125.1716','101.82','1100','2026-07-15','2028-07-14','','Yes','45','80','2026-07-15','Yes','Yes','5','846776','','189','Juan Dela Cruz'],
+  ['San Roque Hub','GMA','','14.35','121.05','138','759','2026-08-01','2029-07-31','','Yes','62','78','2026-08-01','Yes','Yes','5','629834','','181','Maria Santos']
 ];
 function buildSampleCSV() {
   const rows=[SAMPLE_CSV_HEADERS, ...SAMPLE_CSV_ROWS];
@@ -777,17 +778,16 @@ function isBigVismCity(city) {
   if (!c) return false;
   return BIG_VISMIN_CITIES.some(name => c.includes(name));
 }
-function qualifiesForDarkStoreBuffer(c) {
+function isDarkStoreRegion(c) {
   const region = (c.region||'').toUpperCase().trim();
   if (['MM','NCR','GMA'].includes(region)) return true;
   if (['VIS','MIN'].includes(region)) return isBigVismCity(c.city);
   return false;
 }
-const MIN_SIZE_BASE = 0;
 const DARK_STORE_BUFFER = 100;
-function minSizeRequirement(c) {
-  const buffer = (c.isDarkStore && qualifiesForDarkStoreBuffer(c)) ? DARK_STORE_BUFFER : 0;
-  return MIN_SIZE_BASE + buffer;
+function effectiveSize(c, opts) {
+  const applies = !!(opts && opts.darkStoreBuffer) && isDarkStoreRegion(c);
+  return { size: c.size + (applies ? DARK_STORE_BUFFER : 0), buffered: applies };
 }
 
 function projectContract(rentPerSqm, size, escalationPct, years, renovation) {
@@ -888,11 +888,14 @@ async function evaluateCandidate(c, progStart, progEnd, today, opts) {
   const inWindow = c.goLive ? (c.goLive>=progStart && c.goLive<=progEnd) : null;
   r.inWindow = inWindow;
 
+  const { size: effSize, buffered: darkStoreBufferApplied } = effectiveSize(c, opts);
+  r.effSize = effSize; r.darkStoreBufferApplied = darkStoreBufferApplied;
+
   const leaseYears = Math.max(1, Math.ceil((c.leaseMonths||0)/12));
-  const renoBench = (c.renoBench!==null && c.renoBench!==undefined) ? c.renoBench : standardRenoCost(c.size);
+  const renoBench = (c.renoBench!==null && c.renoBench!==undefined) ? c.renoBench : standardRenoCost(effSize);
   r.renoBenchAuto = (c.renoBench===null || c.renoBench===undefined);
-  const bench = projectContract(benchmarkRent, c.size, c.escalation, leaseYears, renoBench);
-  const act = projectContract(c.actualRent, c.size, c.escalation, leaseYears, c.renoActual||0);
+  const bench = projectContract(benchmarkRent, effSize, c.escalation, leaseYears, renoBench);
+  const act = projectContract(c.actualRent, effSize, c.escalation, leaseYears, c.renoActual||0);
   const totalSavings = bench.total - act.total;
   const savingsPct = bench.total>0 ? totalSavings/bench.total : 0;
   r.finance = { bench, act, totalSavings, savingsPct, leaseYears };
@@ -925,13 +928,6 @@ async function evaluateCandidate(c, progStart, progEnd, today, opts) {
   } else { p7detail = 'DD/COL not complete and no go-live date to compute grace period'; }
   policies.push({id:7, label:'Compliance Docs (DD + COL)', pass:p7pass, pending:p7pending, detail:p7detail});
 
-  const minSize = minSizeRequirement(c);
-  const buffered = minSize > 0;
-  policies.push({id:8, label:'Minimum Size Requirement', pass: c.size>=minSize,
-    detail: buffered
-      ? `${c.size} sqm — needs ≥${minSize} sqm (Dark Store buffer applies: ${c.region||'—'}${c.city?' / '+c.city:''})`
-      : `${c.size} sqm — no minimum required${c.isDarkStore?' (Dark Store, but not in MM/GMA or a qualifying big VISMIN city)':''}`});
-
   r.policies = policies;
   const hardFails = policies.filter(p=>!p.pass && !p.pending);
   r.eligible = inWindow!==false && hardFails.length===0;
@@ -942,7 +938,7 @@ async function evaluateCandidate(c, progStart, progEnd, today, opts) {
   else if (savingsPct>=0.251) { tier=30; tierLabel='25.1%–50%'; }
   else if (savingsPct>=0.15) { tier=15; tierLabel='15%–25%'; }
   r.tier=tier; r.tierLabel=tierLabel;
-  r.payout = (r.eligible && tier>0) ? Math.min(tier*c.size, CAP) : 0;
+  r.payout = (r.eligible && tier>0) ? Math.min(tier*effSize, CAP) : 0;
   return r;
 }
 
@@ -952,7 +948,8 @@ function getEvalOptions() {
     radiusKm: parseFloat(document.getElementById('opt-radius-km').value) || 0,
     exclOutliers: document.getElementById('opt-excl-outliers').checked,
     sublessorOn: document.getElementById('opt-sublessor').checked,
-    sublessorPct: parseFloat(document.getElementById('opt-sublessor-pct').value) || 0
+    sublessorPct: parseFloat(document.getElementById('opt-sublessor-pct').value) || 0,
+    darkStoreBuffer: document.getElementById('opt-dark-store-buffer').checked
   };
 }
 function onPoolModeChange() {
@@ -1016,24 +1013,25 @@ function renderResults() {
   </div>
   <div class="content-body">
   <table class="results"><thead><tr>
-    <th></th><th>Hub</th><th>Region</th><th>Go-Live</th><th>Benchmark ₱/sqm</th><th>Actual ₱/sqm</th>
+    <th></th><th>Hub</th><th>Region</th><th>Go-Live</th><th>Benchmark ₱/sqm</th><th>Actual ₱/sqm</th><th>Size (sqm)</th>
     <th>Rent Savings</th><th>Contract Savings</th><th>Tier</th><th>Status</th><th>Pay-out</th>
   </tr></thead><tbody>`;
 
   results.forEach((r,i) => {
     if (r.error) {
-      html += `<tr class="r-fail" onclick="toggleRow(${i})"><td>${expandedIdx===i?'▼':'▶'}</td><td>${esc(r.c.name)}</td><td colspan="9" style="color:#c0392b">${esc(r.error)}</td></tr>`;
+      html += `<tr class="r-fail" onclick="toggleRow(${i})"><td>${expandedIdx===i?'▼':'▶'}</td><td>${esc(r.c.name)}</td><td colspan="10" style="color:#c0392b">${esc(r.error)}</td></tr>`;
       return;
     }
     const st = statusInfo(r);
     const simplePct = r.benchmarkRent>0 ? (r.benchmarkRent - r.c.actualRent)/r.benchmarkRent : null;
     html += `<tr class="${st.cls}" onclick="toggleRow(${i})">
       <td>${expandedIdx===i?'▼':'▶'}</td>
-      <td>${esc(r.c.name)}${r.c.isDarkStore?'<span class="badge b-darkstore" title="Marked as Dark Store">🌙 DS</span>':''}${r.c.pic?`<br><span style="color:#aaa;font-size:11px">PIC: ${esc(r.c.pic)}</span>`:''}</td>
+      <td>${esc(r.c.name)}${r.darkStoreBufferApplied?'<span class="badge b-darkstore" title="Dark Store buffer applied (+100 sqm)">🌙 DS</span>':''}${r.c.pic?`<br><span style="color:#aaa;font-size:11px">PIC: ${esc(r.c.pic)}</span>`:''}</td>
       <td>${r.c.region?`<span class="badge b-region">${esc(r.c.region)}</span>`:'—'}</td>
       <td>${r.c.goLive?r.c.goLive.toLocaleDateString():'—'}</td>
       <td>₱${r.benchmarkRent.toFixed(2)}${r.usedOverride?' <span style="color:#aaa;font-size:10px">(override)</span>':''}</td>
       <td>₱${r.c.actualRent.toFixed(2)}</td>
+      <td>${r.effSize}${r.darkStoreBufferApplied?` <span style="color:#8e44ad;font-size:10.5px">(+100)</span>`:''}</td>
       <td>${simplePct!==null?pct(simplePct):'—'}</td>
       <td>${pct(r.finance.savingsPct)}</td>
       <td>${r.tier?('₱'+r.tier+'/sqm'):'—'}</td>
@@ -1107,15 +1105,15 @@ function renderDetailRow(r, rowIdx) {
         ? `<div id="detail-map" class="detail-map"></div>`
         : '');
 
-  return `<tr class="detail-row"><td colspan="11">
+  return `<tr class="detail-row"><td colspan="12">
     <div class="detail-grid">
       <div class="detail-col">
         <h4>Policy Checklist</h4>
         ${policiesHtml}
       </div>
       <div class="detail-col">
-        <h4>Contract Cost Projection (${r.finance.leaseYears} yr${r.finance.leaseYears>1?'s':''}, size ${c.size} sqm)</h4>
-        ${finTable('Benchmark scenario', r.finance.bench, r.renoBenchAuto ? `(auto: ₱${standardRenoRate(c.size).toFixed(2)}/sqm rate card)` : '(manual override)')}
+        <h4>Contract Cost Projection (${r.finance.leaseYears} yr${r.finance.leaseYears>1?'s':''}, size ${r.effSize} sqm${r.darkStoreBufferApplied?` — includes +100 sqm Dark Store buffer, actual ${c.size} sqm`:''})</h4>
+        ${finTable('Benchmark scenario', r.finance.bench, r.renoBenchAuto ? `(auto: ₱${standardRenoRate(r.effSize).toFixed(2)}/sqm rate card)` : '(manual override)')}
         ${finTable('Actual scenario', r.finance.act)}
         <div style="font-size:12.5px;color:#555">Total contract savings: <b>${money(r.finance.totalSavings)}</b> (${pct(r.finance.savingsPct)})</div>
       </div>
@@ -1309,9 +1307,10 @@ function tierFormulaText(r) {
 }
 function payoutFormulaText(r) {
   if (!r.eligible || !r.tier) return '₱0 (not eligible, or contract savings below 15% tier threshold)';
-  const raw = r.tier * r.c.size;
+  const raw = r.tier * r.effSize;
   const capped = Math.min(raw, CAP);
-  return `min(₱${r.tier}/sqm × ${r.c.size}sqm, ₱50,000 cap) = min(₱${money(raw)}, ₱50,000) = ₱${money(capped)}`;
+  const sizeNote = r.darkStoreBufferApplied ? `${r.effSize}sqm (${r.c.size}sqm + 100 Dark Store buffer)` : `${r.effSize}sqm`;
+  return `min(₱${r.tier}/sqm × ${sizeNote}, ₱50,000 cap) = min(₱${money(raw)}, ₱50,000) = ₱${money(capped)}`;
 }
 function failedPoliciesText(r) {
   if (r.inWindow===false) return 'Outside program window';
@@ -1322,11 +1321,11 @@ function failedPoliciesText(r) {
 
 function downloadResultsCSV() {
   const headers = [
-    'Hub','PIC','Region','City','Dark Store','Min Size Required (sqm)','Go-Live','Status',
+    'Hub','PIC','Region','City','Go-Live','Status',
     'Pool Mode','Benchmark Hubs Used (detail)',
     'Benchmark Rent/sqm','Benchmark Formula',
     'Actual Rent/sqm','Rent Savings %','Rent Savings Formula',
-    'Size (sqm)','Lease Start','Lease End','Lease Duration (months)','Lease Duration Formula','Escalation %/yr',
+    'Size (sqm) — Original','Size (sqm) — Used in Calculations','Dark Store Buffer Applied','Lease Start','Lease End','Lease Duration (months)','Lease Duration Formula','Escalation %/yr',
     'Benchmark Renovation Cost','Benchmark Renovation Basis','Benchmark Year-by-Year','Benchmark Total Contract Cost',
     'Actual Renovation Cost','Actual Year-by-Year','Actual Total Contract Cost',
     'Total Contract Savings (Php)','Total Contract Savings Formula','Contract Savings %',
@@ -1340,7 +1339,7 @@ function downloadResultsCSV() {
     const st=statusInfo(r);
     const simplePct = r.benchmarkRent>0 ? (r.benchmarkRent-r.c.actualRent)/r.benchmarkRent : '';
     rows.push([
-      r.c.name, r.c.pic||'', r.c.region||'', r.c.city||'', r.c.isDarkStore?'Yes':'No', minSizeRequirement(r.c),
+      r.c.name, r.c.pic||'', r.c.region||'', r.c.city||'',
       r.c.goLive?r.c.goLive.toISOString().slice(0,10):'',
       st.label,
       r.usedOverride ? 'Manual override' : (r.poolLabel||''),
@@ -1348,7 +1347,7 @@ function downloadResultsCSV() {
       r.benchmarkRent.toFixed(2), benchmarkFormulaText(r),
       r.c.actualRent.toFixed(2),
       simplePct!==''?(simplePct*100).toFixed(1)+'%':'', rentSavingsFormulaText(r),
-      r.c.size,
+      r.c.size, r.effSize, r.darkStoreBufferApplied?'Yes (+100 sqm)':'No',
       r.c.leaseStart?r.c.leaseStart.toISOString().slice(0,10):'',
       r.c.leaseEnd?r.c.leaseEnd.toISOString().slice(0,10):'',
       r.c.leaseMonths||'',
@@ -1357,7 +1356,7 @@ function downloadResultsCSV() {
         : 'Entered directly (no start/end dates supplied)',
       r.c.escalation,
       Math.round(r.finance.bench.renovation),
-      r.renoBenchAuto ? `Auto: ₱${standardRenoRate(r.c.size).toFixed(2)}/sqm rate card × ${r.c.size}sqm` : 'Manual override (CSV)',
+      r.renoBenchAuto ? `Auto: ₱${standardRenoRate(r.effSize).toFixed(2)}/sqm rate card × ${r.effSize}sqm` : 'Manual override (CSV)',
       yearByYearText(r.finance.bench), Math.round(r.finance.bench.total),
       Math.round(r.finance.act.renovation), yearByYearText(r.finance.act), Math.round(r.finance.act.total),
       Math.round(r.finance.totalSavings), contractSavingsFormulaText(r), (r.finance.savingsPct*100).toFixed(1)+'%',
