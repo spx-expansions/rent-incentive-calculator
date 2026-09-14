@@ -53,6 +53,8 @@ header .win span.arrow { opacity:.7 }
 .btn-sm { padding: 5px 10px; font-size: 12px; }
 .btn-row { display: flex; gap: 7px; margin-top: 8px; }
 .btn-row .btn { flex: 1; }
+.btn-spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,.4); border-top-color: #fff; border-radius: 50%; margin-right: 7px; vertical-align: -1px; animation: btn-spin .7s linear infinite; }
+@keyframes btn-spin { to { transform: rotate(360deg); } }
 
 .policy-card { background: #f7f8fa; border-radius: 7px; padding: 10px 12px; margin-bottom: 6px; font-size: 12px; color: #555; line-height: 1.6; }
 .policy-card b { color: #333; }
@@ -1102,16 +1104,16 @@ async function evaluateAll() {
   const opts = getEvalOptions();
   const needsGeocode = opts.poolMode === 'city' || opts.poolMode === 'district';
   const btn = document.getElementById('eval-btn');
+  const origLabel = btn.innerHTML;
   btn.disabled = true;
-  const origLabel = btn.textContent;
   const newResults = [];
   for (let i=0;i<candidates.length;i++) {
-    if (needsGeocode) btn.textContent = `Evaluating… (${i+1}/${candidates.length})`;
+    btn.innerHTML = `<span class="btn-spinner"></span>Evaluating… (${i+1}/${candidates.length})`;
     newResults.push(await evaluateCandidate(candidates[i], progStart, progEnd, today, opts));
     if (needsGeocode && i < candidates.length-1) await new Promise(res=>setTimeout(res, 1100));
   }
   results = newResults;
-  btn.textContent = origLabel;
+  btn.innerHTML = origLabel;
   btn.disabled = candidates.length===0;
   expandedIdx = null;
   renderResults();
