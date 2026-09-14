@@ -232,6 +232,10 @@ table.fin tr.total td { font-weight: 700; border-top: 2px solid #ddd; }
         <span>Exclude statistical outliers</span>
       </div>
       <div class="opt-line">
+        <input type="checkbox" id="opt-excl-interisland" onchange="onSettingsChange()">
+        <span>Exclude hubs needing inter-island travel</span>
+      </div>
+      <div class="opt-line">
         <input type="checkbox" id="opt-sublessor" checked onchange="onSettingsChange()">
         <span>Apply &minus;</span>
         <input type="number" id="opt-sublessor-pct" value="10" min="0" max="100" step="0.1" onchange="onSettingsChange()">
@@ -247,7 +251,7 @@ table.fin tr.total td { font-weight: 700; border-top: 2px solid #ddd; }
         <input type="number" id="opt-dark-store-buffer-amt" value="200" min="0" step="1" onchange="onSettingsChange()">
         <span>sqm Dark Store buffer (MM/GMA &amp; big VIS/MIN cities)</span>
       </div>
-      <div class="hint" style="margin-top:8px">"Same city/district" and driving routes look up boundaries and routes online (Nominatim/OSRM) when you evaluate or open a hub's map — this can take a few seconds per hub. The Dark Store buffer adds the entered sqm amount to a hub's size (used in every calculation below) for any hub in MM, GMA, NCR, or a big VIS/MIN city — Cebu, Mandaue, Lapu-Lapu, Bacolod, Iloilo, Tacloban, Davao, Zamboanga, Cagayan de Oro, General Santos, Butuan, Iligan (needs a <b>City</b> column to check VIS/MIN hubs). No manual per-hub marking needed.</div>
+      <div class="hint" style="margin-top:8px">"Same city/district" and driving routes look up boundaries and routes online (Nominatim/OSRM) when you evaluate or open a hub's map — this can take a few seconds per hub. "Exclude hubs needing inter-island travel" checks actual driving reachability (OSRM) for each benchmark hub and drops any that require a sea crossing to reach — different islands can have very different rent rates, so this keeps the benchmark pool comparable; also adds a lookup per candidate. The Dark Store buffer adds the entered sqm amount to a hub's size (used in every calculation below) for any hub in MM, GMA, NCR, or a big VIS/MIN city — Cebu, Mandaue, Lapu-Lapu, Bacolod, Iloilo, Tacloban, Davao, Zamboanga, Cagayan de Oro, General Santos, Butuan, Iligan (needs a <b>City</b> column to check VIS/MIN hubs). No manual per-hub marking needed.</div>
     </div>
 
     <div class="sec">
@@ -918,6 +922,42 @@ function bboxOf(geo) {
 }
 
 /* ═══════ BENCHMARK POOL SELECTION ═══════ */
+/* ═══════ ISLAND / WATER CHECK ═══════ */
+async function filterSameIsland(lat, lng, candidates) {
+  if (!candidates.length) return candidates;
+  // Build OSRM table request: target as source, all hubs as destinations
+  // Request both duration AND distance to detect cross-sea snapping
+  const coords = [[lng, lat], ...candidates.map(h=>[h.lng, h.lat])];
+  const coordStr = coords.map(c=>c[0].toFixed(6)+','+c[1].toFixed(6)).join(';');
+  const destIdx = candidates.map((_,i)=>i+1).join(';');
+  const url = `https://router.project-osrm.org/table/v1/driving/${coordStr}?sources=0&destinations=${destIdx}&annotations=duration,distance`;
+  try {
+    const r = await fetch(url, {signal: AbortSignal.timeout(5000)});
+    if (!r.ok) return candidates;
+    const j = await r.json();
+    if (j.code !== 'Ok' || !j.durations) return candidates;
+    const durations = j.durations[0];
+    const distances = j.distances ? j.distances[0] : null;
+    return candidates
+      .map((h, i) => ({
+        ...h,
+        drivingDist: distances && distances[i] ? distances[i] / 1000 : null, // km
+        drivingDur: durations[i] ? Math.round(durations[i] / 60) : null // minutes
+      }))
+      .filter((h, i) => {
+        if (durations[i] === null) return false;
+        if (distances && distances[i]) {
+          const routeM = distances[i];
+          const straightM = h.dist * 1000;
+          if (straightM > 100 && routeM / straightM > 3.5) return false;
+        }
+        return true;
+      });
+  } catch {
+    return candidates; // fail open on network error
+  }
+}
+
 async function selectBenchmarkPool(c, opts) {
   const candName = (c.name||'').toLowerCase().trim();
   const withDist = benchHubs
@@ -948,6 +988,11 @@ async function selectBenchmarkPool(c, opts) {
   }
 
   if (!pool) pool = withDist.slice(0, Math.min(K_NEAREST, withDist.length));
+
+  if (opts.excludeInterIsland && pool.length) {
+    pool = await filterSameIsland(c.lat, c.lng, pool);
+  }
+
   return { pool, poolLabel, fellBack };
 }
 function applyBenchAdjustments(pool, opts) {
@@ -1049,6 +1094,7 @@ function getEvalOptions() {
     poolMode: document.getElementById('opt-pool-mode').value,
     radiusKm: parseFloat(document.getElementById('opt-radius-km').value) || 0,
     exclOutliers: document.getElementById('opt-excl-outliers').checked,
+    excludeInterIsland: document.getElementById('opt-excl-interisland').checked,
     sublessorOn: document.getElementById('opt-sublessor').checked,
     sublessorPct: parseFloat(document.getElementById('opt-sublessor-pct').value) || 0,
     darkStoreBuffer: document.getElementById('opt-dark-store-buffer').checked,
