@@ -232,7 +232,7 @@ table.fin tr.total td { font-weight: 700; border-top: 2px solid #ddd; }
         <span>Exclude statistical outliers</span>
       </div>
       <div class="opt-line">
-        <input type="checkbox" id="opt-excl-interisland" onchange="onSettingsChange()">
+        <input type="checkbox" id="opt-excl-interisland" checked onchange="onSettingsChange()">
         <span>Exclude hubs needing inter-island travel</span>
       </div>
       <div class="opt-line">
@@ -246,7 +246,7 @@ table.fin tr.total td { font-weight: 700; border-top: 2px solid #ddd; }
         <span>Show driving routes on hub map</span>
       </div>
       <div class="opt-line" style="margin-bottom:0">
-        <input type="checkbox" id="opt-dark-store-buffer" onchange="onSettingsChange()">
+        <input type="checkbox" id="opt-dark-store-buffer" checked onchange="onSettingsChange()">
         <span>Add &plus;</span>
         <input type="number" id="opt-dark-store-buffer-amt" value="200" min="0" step="1" onchange="onSettingsChange()">
         <span>sqm Dark Store buffer (MM/GMA &amp; big VIS/MIN cities)</span>
